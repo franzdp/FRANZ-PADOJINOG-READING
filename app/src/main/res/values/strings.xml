@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">ARAL Reading BES</string>
+    <string name="school_full_name">Bagacay Elementary School</string>
+    <string name="program_subtitle">ARAL-Reading Remediation Program</string>
+    <string name="school_credit">Developed for Bagacay Elementary School • DepEd ARAL-Reading</string>
+    <string name="cd_bagacay_logo">Bagacay Elementary School Crest</string>
+    <string name="cd_speak_word">Listen to word or passage</string>
+    <string name="cd_back">Navigate back</string>
+    <string name="cd_backup_restore">Backup and restore learner records</string>
+    <string name="cd_progress_report">Open PDF progress report and Messenger export</string>
+</resources>
