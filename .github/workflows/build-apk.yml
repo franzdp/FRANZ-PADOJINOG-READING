@@ -2,9 +2,7 @@ name: Build ARAL Reading Bagacay ES APK
 
 on:
   push:
-    branches: [ main, master ]
   pull_request:
-    branches: [ main, master ]
   workflow_dispatch:
 
 jobs:
@@ -21,17 +19,13 @@ jobs:
           distribution: temurin
           java-version: '21'
 
+      - name: Set up Android SDK and accept licenses
+        uses: android-actions/setup-android@v3
+
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '9.3.1'
-
-      - name: Accept Android SDK licenses
-        run: |
-          SDK_ROOT="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
-          if [ -n "$SDK_ROOT" ] && [ -x "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" ]; then
-            yes | "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
-          fi
 
       - name: Prepare debug keystore and environment file
         run: |
@@ -51,26 +45,38 @@ jobs:
           fi
 
       - name: Run Unit and Robolectric Tests
-        run: gradle :app:testDebugUnitTest
+        run: >
+          gradle :app:testDebugUnitTest
+          --no-daemon
+          -Dorg.gradle.jvmargs="-Xmx2560m -XX:MaxMetaspaceSize=768m -Dfile.encoding=UTF-8"
 
       - name: Build Debug APK
-        run: gradle :app:assembleDebug
+        run: >
+          gradle :app:assembleDebug
+          --no-daemon
+          -Dorg.gradle.jvmargs="-Xmx2560m -XX:MaxMetaspaceSize=768m -Dfile.encoding=UTF-8"
 
       - name: Package APK with School App Name
         run: |
           mkdir -p dist
           cp app/build/outputs/apk/debug/app-debug.apk dist/ARAL-Reading-Bagacay-ES.apk
 
-      - name: Build Signed Release APK (when keystore secret is configured)
-        if: ${{ secrets.KEYSTORE_BASE64 != '' && secrets.STORE_PASSWORD != '' && secrets.KEY_PASSWORD != '' }}
+      - name: Build Signed Release APK (optional when secrets exist)
         env:
-          KEYSTORE_PATH: ${{ github.workspace }}/my-upload-key.jks
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
           STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          KEYSTORE_PATH: ${{ github.workspace }}/my-upload-key.jks
         run: |
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > my-upload-key.jks
-          gradle :app:assembleRelease
-          cp app/build/outputs/apk/release/app-release.apk dist/ARAL-Reading-Bagacay-ES-release.apk
+          if [ -n "$KEYSTORE_BASE64" ] && [ -n "$STORE_PASSWORD" ] && [ -n "$KEY_PASSWORD" ]; then
+            echo "$KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
+            gradle :app:assembleRelease \
+              --no-daemon \
+              -Dorg.gradle.jvmargs="-Xmx2560m -XX:MaxMetaspaceSize=768m -Dfile.encoding=UTF-8"
+            cp app/build/outputs/apk/release/app-release.apk dist/ARAL-Reading-Bagacay-ES-release.apk
+          else
+            echo "Release signing secrets not set; skipping release APK."
+          fi
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
