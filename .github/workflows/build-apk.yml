@@ -8,6 +8,8 @@ on:
 jobs:
   build-apk:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout repository
@@ -91,3 +93,22 @@ jobs:
           name: ARAL-Reading-Bagacay-ES-APK
           path: dist/*.apk
           if-no-files-found: error
+
+      - name: Publish GitHub Release
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            TAG="${GITHUB_REF_NAME}"
+          else
+            TAG="v1.0.${GITHUB_RUN_NUMBER}"
+          fi
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/*.apk --clobber
+          else
+            gh release create "$TAG" dist/*.apk \
+              --target "$GITHUB_SHA" \
+              --title "ARAL Reading Bagacay ES ($TAG)" \
+              --notes "Automated APK build for ARAL Reading Bagacay ES."
+          fi
