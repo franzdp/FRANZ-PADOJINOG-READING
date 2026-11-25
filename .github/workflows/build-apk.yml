@@ -55,13 +55,13 @@ jobs:
         run: >
           gradle :app:testDebugUnitTest
           --no-daemon
-          -Dorg.gradle.jvmargs="-Xmx2560m -XX:MaxMetaspaceSize=768m -Dfile.encoding=UTF-8"
+          -Dorg.gradle.jvmargs="-Xmx2560m -XX:MaxMetaspaceSize=768m -Djava.awt.headless=true -Dfile.encoding=UTF-8"
 
       - name: Build Debug APK
         run: >
           gradle :app:assembleDebug
           --no-daemon
-          -Dorg.gradle.jvmargs="-Xmx2560m -XX:MaxMetaspaceSize=768m -Dfile.encoding=UTF-8"
+          -Dorg.gradle.jvmargs="-Xmx2560m -XX:MaxMetaspaceSize=768m -Djava.awt.headless=true -Dfile.encoding=UTF-8"
 
       - name: Package APK with School App Name
         run: |
@@ -79,7 +79,7 @@ jobs:
             echo "$KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
             gradle :app:assembleRelease \
               --no-daemon \
-              -Dorg.gradle.jvmargs="-Xmx2560m -XX:MaxMetaspaceSize=768m -Dfile.encoding=UTF-8"
+              -Dorg.gradle.jvmargs="-Xmx2560m -XX:MaxMetaspaceSize=768m -Djava.awt.headless=true -Dfile.encoding=UTF-8"
             cp app/build/outputs/apk/release/app-release.apk dist/ARAL-Reading-Bagacay-ES-release.apk
           else
             echo "Release signing secrets not set; skipping release APK."
