@@ -64,9 +64,12 @@ fun AralReadingApp(
     val snackbarHostState = remember { SnackbarHostState() }
 
     val learners by viewModel.learners.collectAsStateWithLifecycle()
+    val progressByLearner by viewModel.progressByLearner.collectAsStateWithLifecycle()
+    val wrongCountByLearner by viewModel.wrongCountByLearner.collectAsStateWithLifecycle()
     val activeLearner by viewModel.activeLearner.collectAsStateWithLifecycle()
     val activeProgress by viewModel.activeProgress.collectAsStateWithLifecycle()
     val activeWrongItems by viewModel.activeWrongItems.collectAsStateWithLifecycle()
+    val activeInProgress by viewModel.activeInProgress.collectAsStateWithLifecycle()
     val selectedTrack by viewModel.selectedTrack.collectAsStateWithLifecycle()
     val lessonState by viewModel.lessonState.collectAsStateWithLifecycle()
 
@@ -123,6 +126,8 @@ fun AralReadingApp(
                 composable(Routes.CHECK_IN) {
                     CheckInScreen(
                         learners = learners,
+                        progressByLearner = progressByLearner,
+                        wrongCountByLearner = wrongCountByLearner,
                         onCheckInSubmit = { name, grade, section ->
                             viewModel.checkInAndActivate(name, grade, section) {
                                 navController.navigate(Routes.DASHBOARD)
@@ -133,6 +138,7 @@ fun AralReadingApp(
                                 navController.navigate(Routes.DASHBOARD)
                             }
                         },
+                        onUpdateLearner = viewModel::updateLearnerProfile,
                         onDeleteLearner = { id -> viewModel.deleteLearner(id) },
                         onOpenBackupRestore = { showBackupDialog = true },
                     )
@@ -150,12 +156,14 @@ fun AralReadingApp(
                             selectedTrack = selectedTrack,
                             progressList = activeProgress,
                             wrongItems = activeWrongItems,
+                            inProgressList = activeInProgress,
                             onSelectTrack = viewModel::selectTrack,
                             onStartModule = { moduleId ->
                                 viewModel.startModule(moduleId)
                                 navController.navigate(Routes.LESSON)
                             },
                             onSwitchLearner = {
+                                viewModel.switchLearner()
                                 navController.popBackStack(Routes.CHECK_IN, inclusive = false)
                             },
                             onOpenReport = {
@@ -183,7 +191,7 @@ fun AralReadingApp(
                                 if (lessonState.isRemediationDrill) {
                                     viewModel.startRepeatedWrongPractice()
                                 } else {
-                                    viewModel.startModule(mod.id)
+                                    viewModel.startModule(mod.id, forceRestart = true)
                                 }
                             }
                         },

@@ -13,6 +13,7 @@ import com.example.curriculum.ReadingQuestion
 import com.example.curriculum.ReadingTrack
 import com.example.data.AralDatabase
 import com.example.data.AralRepository
+import com.example.data.InProgressSessionEntity
 import com.example.data.LearnerEntity
 import com.example.data.MasteryBadgeTier
 import com.example.data.SessionProgressEntity
@@ -21,7 +22,6 @@ import com.example.report.MessengerReportSharer
 import com.example.report.PdfGenerationResult
 import com.example.report.ProgressPdfGenerator
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -29,8 +29,8 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -55,7 +55,6 @@ data class LessonRunnerUiState(
         get() = questions.getOrNull(currentIndex)
 }
 
-@OptIn(ExperimentalCoroutinesApi::class)
 class AralViewModel(application: Application) : AndroidViewModel(application) {
 
     private val database = AralDatabase.getInstance(application)
@@ -66,22 +65,43 @@ class AralViewModel(application: Application) : AndroidViewModel(application) {
     val statusMessages: SharedFlow<String> = _statusMessages.asSharedFlow()
 
     val learners: StateFlow<List<LearnerEntity>> = repository.observeLearners()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    private val allProgress: StateFlow<List<SessionProgressEntity>> = repository.observeAllProgress()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    private val allWrongItems: StateFlow<List<WrongItemEntity>> = repository.observeAllWrongItems()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    private val allInProgress: StateFlow<List<InProgressSessionEntity>> = repository.observeAllInProgress()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    val progressByLearner: StateFlow<Map<String, List<SessionProgressEntity>>> = allProgress
+        .map { list -> list.groupBy { it.learnerId } }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
+
+    val wrongCountByLearner: StateFlow<Map<String, Int>> = allWrongItems
+        .map { list -> list.groupingBy { it.learnerId }.eachCount() }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
 
     private val _activeLearnerId = MutableStateFlow<String?>(null)
     val activeLearnerId: StateFlow<String?> = _activeLearnerId.asStateFlow()
 
-    val activeLearner: StateFlow<LearnerEntity?> = _activeLearnerId
-        .flatMapLatest { id -> if (id == null) flowOf(null) else repository.observeLearner(id) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    val activeLearner: StateFlow<LearnerEntity?> = combine(_activeLearnerId, learners) { id, list ->
+        if (id == null) null else list.firstOrNull { it.id == id }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
-    val activeProgress: StateFlow<List<SessionProgressEntity>> = _activeLearnerId
-        .flatMapLatest { id -> if (id == null) flowOf(emptyList()) else repository.observeProgress(id) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val activeProgress: StateFlow<List<SessionProgressEntity>> = combine(_activeLearnerId, allProgress) { id, list ->
+        if (id == null) emptyList() else list.filter { it.learnerId == id }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    val activeWrongItems: StateFlow<List<WrongItemEntity>> = _activeLearnerId
-        .flatMapLatest { id -> if (id == null) flowOf(emptyList()) else repository.observeWrongItems(id) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val activeWrongItems: StateFlow<List<WrongItemEntity>> = combine(_activeLearnerId, allWrongItems) { id, list ->
+        if (id == null) emptyList() else list.filter { it.learnerId == id }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    val activeInProgress: StateFlow<List<InProgressSessionEntity>> = combine(_activeLearnerId, allInProgress) { id, list ->
+        if (id == null) emptyList() else list.filter { it.learnerId == id }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     private val _selectedTrack = MutableStateFlow(ReadingTrack.KS1_ENGLISH)
     val selectedTrack: StateFlow<ReadingTrack> = _selectedTrack.asStateFlow()
@@ -103,6 +123,9 @@ class AralViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
         viewModelScope.launch {
+            ttsManager.stop()
+            _lessonState.value = LessonRunnerUiState()
+            _lastPdfResult.value = null
             val learner = repository.checkInLearner(
                 fullName = fullName,
                 gradeLevel = gradeLevel,
@@ -116,26 +139,64 @@ class AralViewModel(application: Application) : AndroidViewModel(application) {
 
     fun resumeReturningLearner(learner: LearnerEntity, onReady: () -> Unit) {
         viewModelScope.launch {
+            ttsManager.stop()
+            _lessonState.value = LessonRunnerUiState()
+            _lastPdfResult.value = null
+            val track = ReadingTrack.fromId(learner.preferredTrackId)
+            val scopedModuleId = learner.lastModuleId?.takeIf {
+                CurriculumRepository.getModuleById(it)?.track == track
+            }
             repository.touchLearnerResume(
                 learnerId = learner.id,
-                trackId = learner.preferredTrackId,
-                moduleId = learner.lastModuleId,
+                trackId = track.id,
+                moduleId = scopedModuleId,
             )
             _activeLearnerId.value = learner.id
-            _selectedTrack.value = ReadingTrack.fromId(learner.preferredTrackId)
+            _selectedTrack.value = track
             onReady()
         }
+    }
+
+    fun switchLearner() {
+        ttsManager.stop()
+        _activeLearnerId.value = null
+        _lessonState.value = LessonRunnerUiState()
+        _lastPdfResult.value = null
     }
 
     fun selectTrack(track: ReadingTrack) {
         _selectedTrack.value = track
         val learner = activeLearner.value ?: return
+        val scopedModuleId = learner.lastModuleId?.takeIf {
+            CurriculumRepository.getModuleById(it)?.track == track
+        }
         viewModelScope.launch {
             repository.touchLearnerResume(
                 learnerId = learner.id,
                 trackId = track.id,
-                moduleId = learner.lastModuleId,
+                moduleId = scopedModuleId,
             )
+        }
+    }
+
+    fun updateLearnerProfile(
+        learnerId: String,
+        fullName: String,
+        gradeLevel: Int,
+        section: String,
+    ) {
+        if (fullName.isBlank()) {
+            _statusMessages.tryEmit("Learner name cannot be empty.")
+            return
+        }
+        viewModelScope.launch {
+            repository.updateLearnerProfile(
+                learnerId = learnerId,
+                fullName = fullName,
+                gradeLevel = gradeLevel,
+                section = section,
+            )
+            _statusMessages.tryEmit("Updated learner profile.")
         }
     }
 
@@ -144,26 +205,86 @@ class AralViewModel(application: Application) : AndroidViewModel(application) {
             repository.deleteLearner(learnerId)
             if (_activeLearnerId.value == learnerId) {
                 _activeLearnerId.value = null
+                _lessonState.value = LessonRunnerUiState()
+                _lastPdfResult.value = null
             }
             _statusMessages.tryEmit("Learner profile removed.")
         }
     }
 
-    fun startModule(moduleId: String) {
+    fun startModule(moduleId: String, forceRestart: Boolean = false) {
         val module = CurriculumRepository.getModuleById(moduleId) ?: return
         _selectedTrack.value = module.track
-        _lessonState.value = LessonRunnerUiState(
-            module = module,
-            questions = module.questions,
-            currentIndex = 0,
-            attemptNumber = 1,
-            isRemediationDrill = false,
-        )
         val learnerId = _activeLearnerId.value
+
+        val cachedCheckpoint = if (!forceRestart && learnerId != null) {
+            activeInProgress.value.firstOrNull { it.learnerId == learnerId && it.moduleId == moduleId }
+        } else {
+            null
+        }
+
+        _lessonState.value = buildLessonStateFromCheckpoint(module, cachedCheckpoint)
+
         if (learnerId != null) {
             viewModelScope.launch {
+                if (forceRestart) {
+                    repository.clearInProgressSession(learnerId, module.id)
+                } else if (cachedCheckpoint == null) {
+                    val dbCheckpoint = repository.getInProgressSession(learnerId, module.id)
+                    if (dbCheckpoint != null && _lessonState.value.module?.id == module.id && _activeLearnerId.value == learnerId) {
+                        _lessonState.value = buildLessonStateFromCheckpoint(module, dbCheckpoint)
+                    }
+                }
                 repository.touchLearnerResume(learnerId, module.track.id, module.id)
             }
+        }
+    }
+
+    private fun buildLessonStateFromCheckpoint(
+        module: ReadingModule,
+        saved: InProgressSessionEntity?,
+    ): LessonRunnerUiState {
+        if (saved == null || module.questions.isEmpty()) {
+            return LessonRunnerUiState(
+                module = module,
+                questions = module.questions,
+                currentIndex = 0,
+                attemptNumber = 1,
+                isRemediationDrill = false,
+            )
+        }
+        val safeIndex = saved.currentIndex.coerceIn(0, module.questions.lastIndex)
+        val itemFinished = saved.isCurrentSolved || saved.isCurrentFailedBothTries
+        return if (itemFinished && safeIndex + 1 < module.questions.size) {
+            LessonRunnerUiState(
+                module = module,
+                questions = module.questions,
+                currentIndex = safeIndex + 1,
+                attemptNumber = 1,
+                selectedOption = null,
+                isCurrentSolved = false,
+                isCurrentFailedBothTries = false,
+                showHintBanner = false,
+                showMiniLessonBanner = false,
+                correctCount = saved.correctCount.coerceIn(0, module.questions.size),
+                firstTryCorrectCount = saved.firstTryCorrectCount.coerceIn(0, module.questions.size),
+                isRemediationDrill = false,
+            )
+        } else {
+            LessonRunnerUiState(
+                module = module,
+                questions = module.questions,
+                currentIndex = safeIndex,
+                attemptNumber = saved.attemptNumber.coerceIn(1, 2),
+                selectedOption = saved.selectedOption,
+                isCurrentSolved = saved.isCurrentSolved,
+                isCurrentFailedBothTries = saved.isCurrentFailedBothTries,
+                showHintBanner = saved.showHintBanner,
+                showMiniLessonBanner = saved.showMiniLessonBanner,
+                correctCount = saved.correctCount.coerceIn(0, module.questions.size),
+                firstTryCorrectCount = saved.firstTryCorrectCount.coerceIn(0, module.questions.size),
+                isRemediationDrill = false,
+            )
         }
     }
 
@@ -213,7 +334,7 @@ class AralViewModel(application: Application) : AndroidViewModel(application) {
         val isCorrect = option == question.correctAnswer
         if (isCorrect) {
             val gotFirstTry = state.attemptNumber == 1
-            _lessonState.value = state.copy(
+            val updated = state.copy(
                 selectedOption = option,
                 isCurrentSolved = true,
                 showHintBanner = false,
@@ -221,26 +342,33 @@ class AralViewModel(application: Application) : AndroidViewModel(application) {
                 correctCount = state.correctCount + 1,
                 firstTryCorrectCount = state.firstTryCorrectCount + if (gotFirstTry) 1 else 0,
             )
+            _lessonState.value = updated
+            persistInProgressIfApplicable(updated)
             return
         }
 
         // Wrong answer handling (2-Try Engine)
         if (state.attemptNumber == 1) {
             // Try 1 Wrong -> Show Hint + let learner try a 2nd time
-            _lessonState.value = state.copy(
+            val updated = state.copy(
                 selectedOption = option,
                 attemptNumber = 2,
                 showHintBanner = true,
                 showMiniLessonBanner = false,
             )
+            _lessonState.value = updated
+            persistInProgressIfApplicable(updated)
         } else {
             // Try 2 Wrong -> Record repeated-wrong item + reveal full Mini-Lesson & answer
-            _lessonState.value = state.copy(
+            val updated = state.copy(
                 selectedOption = option,
                 isCurrentFailedBothTries = true,
                 showHintBanner = false,
                 showMiniLessonBanner = true,
             )
+            _lessonState.value = updated
+            persistInProgressIfApplicable(updated)
+
             val learnerId = _activeLearnerId.value
             if (learnerId != null) {
                 val itemModule = CurriculumRepository.getAllModules()
@@ -268,7 +396,7 @@ class AralViewModel(application: Application) : AndroidViewModel(application) {
         val nextIndex = state.currentIndex + 1
 
         if (nextIndex < state.questions.size) {
-            _lessonState.value = state.copy(
+            val updated = state.copy(
                 currentIndex = nextIndex,
                 attemptNumber = 1,
                 selectedOption = null,
@@ -277,6 +405,8 @@ class AralViewModel(application: Application) : AndroidViewModel(application) {
                 showHintBanner = false,
                 showMiniLessonBanner = false,
             )
+            _lessonState.value = updated
+            persistInProgressIfApplicable(updated)
         } else {
             val total = state.questions.size.coerceAtLeast(1)
             val earned = MasteryBadgeTier.fromScore(state.correctCount, total, attemptsCount = 1)
@@ -298,11 +428,36 @@ class AralViewModel(application: Application) : AndroidViewModel(application) {
                         correctCount = state.correctCount,
                         firstTryCorrectCount = state.firstTryCorrectCount,
                     )
+                    repository.clearInProgressSession(learnerId, module.id)
                     _lessonState.value = _lessonState.value.copy(
                         earnedTier = MasteryBadgeTier.fromTierIndex(saved.badgeTier),
                     )
                 }
             }
+        }
+    }
+
+    private fun persistInProgressIfApplicable(state: LessonRunnerUiState) {
+        val learnerId = _activeLearnerId.value ?: return
+        val module = state.module ?: return
+        if (state.isRemediationDrill || state.isCompleted) return
+        val checkpoint = InProgressSessionEntity(
+            learnerId = learnerId,
+            moduleId = module.id,
+            trackId = module.track.id,
+            currentIndex = state.currentIndex,
+            attemptNumber = state.attemptNumber,
+            selectedOption = state.selectedOption,
+            isCurrentSolved = state.isCurrentSolved,
+            isCurrentFailedBothTries = state.isCurrentFailedBothTries,
+            showHintBanner = state.showHintBanner,
+            showMiniLessonBanner = state.showMiniLessonBanner,
+            correctCount = state.correctCount,
+            firstTryCorrectCount = state.firstTryCorrectCount,
+            updatedAt = System.currentTimeMillis(),
+        )
+        viewModelScope.launch {
+            repository.saveInProgressSession(checkpoint)
         }
     }
 
@@ -340,11 +495,9 @@ class AralViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 repository.restoreFromBackupJson(json).getOrThrow()
             }.onSuccess { summary ->
-                val refreshed = repository.observeLearners()
                 _statusMessages.tryEmit(
                     "Restored ${summary.learnersRestored} learner(s), ${summary.sessionsRestored} session(s), ${summary.wrongItemsRestored} wrong item(s).",
                 )
-                refreshed
             }.onFailure { err ->
                 _statusMessages.tryEmit("Restore failed: ${err.localizedMessage ?: "Invalid JSON backup"}")
             }

@@ -74,9 +74,16 @@ fun ReportScreen(
 ) {
     BackHandler { onBack() }
 
-    val countsByTier = remember(progressList) {
+    val learnerProgress = remember(learner.id, progressList) {
+        progressList.filter { it.learnerId == learner.id }
+    }
+    val learnerWrongItems = remember(learner.id, wrongItems) {
+        wrongItems.filter { it.learnerId == learner.id }
+    }
+
+    val countsByTier = remember(learnerProgress) {
         MasteryBadgeTier.entries.associateWith { tier ->
-            progressList.count { it.badgeTier == tier.tierIndex }
+            learnerProgress.count { it.badgeTier == tier.tierIndex }
         }
     }
 
@@ -101,7 +108,7 @@ fun ReportScreen(
                     Column {
                         Text("PDF Progress Report", style = MaterialTheme.typography.titleLarge)
                         Text(
-                            text = "${learner.fullName} • Grade ${learner.gradeLevel} (${learner.keyStage})",
+                            text = "${learner.fullName} • Grade ${learner.gradeLevel} • ${learner.section}",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -201,10 +208,10 @@ fun ReportScreen(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
-                            text = "Repeated-Wrong Tracking (${wrongItems.size})",
+                            text = "Repeated-Wrong Tracking (${learnerWrongItems.size})",
                             style = MaterialTheme.typography.titleMedium,
                         )
-                        if (wrongItems.isNotEmpty()) {
+                        if (learnerWrongItems.isNotEmpty()) {
                             FilledTonalButton(
                                 onClick = onPracticeWrongItems,
                                 modifier = Modifier
@@ -219,7 +226,7 @@ fun ReportScreen(
                     }
                 }
 
-                if (wrongItems.isEmpty()) {
+                if (learnerWrongItems.isEmpty()) {
                     item {
                         Card(
                             modifier = Modifier.fillMaxWidth(),
@@ -234,7 +241,7 @@ fun ReportScreen(
                         }
                     }
                 } else {
-                    items(wrongItems, key = { it.itemId }) { item ->
+                    items(learnerWrongItems, key = { "${learner.id}_${it.itemId}" }) { item ->
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -299,12 +306,12 @@ fun ReportScreen(
                 // Completed Sessions Breakdown
                 item {
                     Text(
-                        text = "Session Scores & Badges (${progressList.size})",
+                        text = "Session Scores & Badges (${learnerProgress.size})",
                         style = MaterialTheme.typography.titleMedium,
                     )
                 }
 
-                if (progressList.isEmpty()) {
+                if (learnerProgress.isEmpty()) {
                     item {
                         Card(
                             modifier = Modifier.fillMaxWidth(),
@@ -319,7 +326,7 @@ fun ReportScreen(
                         }
                     }
                 } else {
-                    items(progressList, key = { it.moduleId }) { progress ->
+                    items(learnerProgress, key = { "${learner.id}_${it.moduleId}" }) { progress ->
                         val module = CurriculumRepository.getModuleById(progress.moduleId)
                         val tier = MasteryBadgeTier.fromTierIndex(progress.badgeTier)
                         val track = ReadingTrack.fromId(progress.trackId)

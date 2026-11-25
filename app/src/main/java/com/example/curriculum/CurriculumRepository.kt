@@ -38,22 +38,29 @@ object CurriculumRepository {
         track: ReadingTrack,
         lastModuleId: String?,
         progressList: List<SessionProgressEntity>,
+        inProgressModuleIds: Set<String> = emptySet(),
     ): ReadingModule {
         val trackModules = getModulesForTrack(track)
         val completedIds = progressList
-            .filter { it.attemptsCount > 0 }
+            .filter { it.trackId == track.id && it.attemptsCount > 0 }
             .map { it.moduleId }
             .toSet()
 
-        if (lastModuleId != null) {
-            val lastIdx = trackModules.indexOfFirst { it.id == lastModuleId }
+        val trackLastModuleId = lastModuleId?.takeIf { modulesById[it]?.track == track }
+        if (trackLastModuleId != null && trackLastModuleId in inProgressModuleIds) {
+            modulesById[trackLastModuleId]?.let { return it }
+        }
+        trackModules.firstOrNull { it.id in inProgressModuleIds }?.let { return it }
+
+        if (trackLastModuleId != null) {
+            val lastIdx = trackModules.indexOfFirst { it.id == trackLastModuleId }
             if (lastIdx >= 0) {
                 val nextUncompleted = trackModules.drop(lastIdx + 1).firstOrNull { it.id !in completedIds }
                 if (nextUncompleted != null) return nextUncompleted
             }
         }
         return trackModules.firstOrNull { it.id !in completedIds }
-            ?: lastModuleId?.let { modulesById[it] }
+            ?: trackLastModuleId?.let { modulesById[it] }
             ?: trackModules.first()
     }
 }

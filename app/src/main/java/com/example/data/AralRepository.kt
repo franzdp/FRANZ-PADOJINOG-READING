@@ -8,13 +8,14 @@ import kotlinx.coroutines.flow.Flow
 
 @JsonClass(generateAdapter = true)
 data class AralBackupPayload(
-    val schemaVersion: Int = 1,
+    val schemaVersion: Int = 2,
     val appName: String = "ARAL Reading Bagacay ES",
     val school: String = "Bagacay Elementary School",
     val exportedAt: Long,
     val learners: List<LearnerEntity>,
     val progress: List<SessionProgressEntity>,
     val wrongItems: List<WrongItemEntity>,
+    val inProgressSessions: List<InProgressSessionEntity> = emptyList(),
 )
 
 data class RestoreSummary(
@@ -41,6 +42,29 @@ class AralRepository(
 
     fun observeWrongItems(learnerId: String): Flow<List<WrongItemEntity>> =
         dao.observeWrongItemsForLearner(learnerId)
+
+    fun observeAllProgress(): Flow<List<SessionProgressEntity>> = dao.observeAllProgress()
+
+    fun observeAllWrongItems(): Flow<List<WrongItemEntity>> = dao.observeAllWrongItems()
+
+    fun observeAllInProgress(): Flow<List<InProgressSessionEntity>> = dao.observeAllInProgress()
+
+    suspend fun getInProgressSession(learnerId: String, moduleId: String): InProgressSessionEntity? =
+        dao.getInProgressOnce(learnerId, moduleId)
+
+    suspend fun saveInProgressSession(session: InProgressSessionEntity) {
+        dao.upsertInProgress(session)
+        dao.updateResumePoint(
+            learnerId = session.learnerId,
+            trackId = session.trackId,
+            moduleId = session.moduleId,
+            timestamp = session.updatedAt,
+        )
+    }
+
+    suspend fun clearInProgressSession(learnerId: String, moduleId: String) {
+        dao.deleteInProgress(learnerId, moduleId)
+    }
 
     suspend fun checkInLearner(
         fullName: String,
@@ -176,6 +200,26 @@ class AralRepository(
         return entity
     }
 
+    suspend fun updateLearnerProfile(
+        learnerId: String,
+        fullName: String,
+        gradeLevel: Int,
+        section: String,
+    ) {
+        val cleanName = fullName.trim().replace(Regex("\\s+"), " ")
+        if (cleanName.isBlank()) return
+        val cleanSection = section.trim().replace(Regex("\\s+"), " ").ifBlank { "Section A" }
+        val clampedGrade = gradeLevel.coerceIn(1, 6)
+        val keyStage = if (clampedGrade <= 3) "KS1" else "KS2"
+        dao.updateLearnerProfile(
+            learnerId = learnerId,
+            fullName = cleanName,
+            gradeLevel = clampedGrade,
+            section = cleanSection,
+            keyStage = keyStage,
+        )
+    }
+
     suspend fun deleteLearner(learnerId: String) {
         dao.deleteLearner(learnerId)
     }
@@ -186,6 +230,7 @@ class AralRepository(
             learners = dao.getAllLearnersOnce(),
             progress = dao.getAllProgressOnce(),
             wrongItems = dao.getAllWrongItemsOnce(),
+            inProgressSessions = dao.getAllInProgressOnce(),
         )
         return backupAdapter.toJson(payload)
     }
@@ -194,13 +239,18 @@ class AralRepository(
         return runCatching {
             val payload = backupAdapter.fromJson(json)
                 ?: throw IllegalArgumentException("Invalid or empty backup JSON file.")
-            if (payload.learners.isEmpty() && payload.progress.isEmpty() && payload.wrongItems.isEmpty()) {
+            if (payload.learners.isEmpty() &&
+                payload.progress.isEmpty() &&
+                payload.wrongItems.isEmpty() &&
+                payload.inProgressSessions.isEmpty()
+            ) {
                 throw IllegalArgumentException("Backup file contains no learner records.")
             }
             dao.restoreMerge(
                 learners = payload.learners,
                 progressList = payload.progress,
                 wrongItems = payload.wrongItems,
+                inProgressList = payload.inProgressSessions,
             )
             RestoreSummary(
                 learnersRestored = payload.learners.size,

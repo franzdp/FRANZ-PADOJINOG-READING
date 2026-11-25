@@ -130,7 +130,7 @@ object ProgressPdfGenerator {
             fun drawFooter(c: Canvas, pNum: Int) {
                 c.drawLine(MARGIN, PAGE_HEIGHT - 36f, PAGE_WIDTH - MARGIN, PAGE_HEIGHT - 36f, dividerPaint)
                 c.drawText(
-                    "Bagacay Elementary School • ARAL-Reading Remediation Program",
+                    "Bagacay ES • ARAL-Reading • This innovation is created by FRANZ D. PADOJINOG",
                     MARGIN,
                     PAGE_HEIGHT - 20f,
                     smallMutedPaint,
@@ -173,7 +173,7 @@ object ProgressPdfGenerator {
             }
             canvas.drawText("BAGACAY ELEMENTARY SCHOOL", MARGIN, 34f, titlePaint)
             canvas.drawText(
-                "ARAL-Reading Progress & Mastery Report (KS1–KS2)",
+                "ARAL-Reading Progress & Mastery Report (Grades 1–6)",
                 MARGIN,
                 54f,
                 subtitlePaint,
@@ -199,13 +199,13 @@ object ProgressPdfGenerator {
 
             canvas.drawText("Learner: ${learner.fullName}", MARGIN + 12f, y + 22f, bodyBoldPaint)
             canvas.drawText(
-                "Grade ${learner.gradeLevel} (${learner.keyStage}) • Section: ${learner.section}",
+                "Grade ${learner.gradeLevel} • Section: ${learner.section}",
                 MARGIN + 12f,
                 y + 40f,
                 bodyPaint,
             )
             canvas.drawText(
-                "Active Track: ${track.title}  |  Completed Sessions: $completedCount  |  Avg Best Score: $avgPct%",
+                "Activity: ${track.title}  |  Completed Sessions: $completedCount  |  Avg Best Score: $avgPct%",
                 MARGIN + 12f,
                 y + 57f,
                 bodyPaint,
@@ -364,7 +364,7 @@ object ProgressPdfGenerator {
     ) {
         val lines = buildList {
             add("BAGACAY ELEMENTARY SCHOOL - ARAL-READING REPORT")
-            add("Learner: ${learner.fullName} | Grade ${learner.gradeLevel} (${learner.keyStage}) - ${learner.section}")
+            add("Learner: ${learner.fullName} | Grade ${learner.gradeLevel} - ${learner.section}")
             add("Completed Sessions: ${progressList.size} | Repeated-Wrong Items: ${wrongItems.size}")
             wrongItems.take(12).forEach {
                 add("Missed (${it.repeatedWrongCount}x): ${it.expectedAnswer} [Last: ${it.lastWrongAnswer}]")
@@ -412,7 +412,7 @@ object ProgressPdfGenerator {
         }
         return buildString {
             append("Bagacay ES ARAL-Reading Report\n")
-            append("Learner: ${learner.fullName} (Grade ${learner.gradeLevel} - ${learner.section}, ${learner.keyStage})\n")
+            append("Learner: ${learner.fullName} (Grade ${learner.gradeLevel} - ${learner.section})\n")
             append("Sessions Completed: $completed | Mastered Badges: $mastered\n")
             if (wrongItems.isNotEmpty()) {
                 append("Repeated-Wrong Items (${wrongItems.size}): $topWeak")

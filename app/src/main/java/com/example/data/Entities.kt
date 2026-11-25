@@ -77,3 +77,33 @@ data class WrongItemEntity(
     val repeatedWrongCount: Int,
     val lastMissedAt: Long,
 )
+
+@JsonClass(generateAdapter = true)
+@Entity(
+    tableName = "in_progress_sessions",
+    primaryKeys = ["learnerId", "moduleId"],
+    foreignKeys = [
+        ForeignKey(
+            entity = LearnerEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["learnerId"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+    ],
+    indices = [Index("learnerId"), Index("trackId")],
+)
+data class InProgressSessionEntity(
+    val learnerId: String,
+    val moduleId: String,
+    val trackId: String,
+    val currentIndex: Int,
+    val attemptNumber: Int,
+    val selectedOption: String? = null,
+    val isCurrentSolved: Boolean = false,
+    val isCurrentFailedBothTries: Boolean = false,
+    val showHintBanner: Boolean = false,
+    val showMiniLessonBanner: Boolean = false,
+    val correctCount: Int = 0,
+    val firstTryCorrectCount: Int = 0,
+    val updatedAt: Long,
+)

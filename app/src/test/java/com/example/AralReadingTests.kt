@@ -7,6 +7,7 @@ import com.example.curriculum.CurriculumRepository
 import com.example.curriculum.ReadingTrack
 import com.example.data.AralDatabase
 import com.example.data.AralRepository
+import com.example.data.InProgressSessionEntity
 import com.example.data.MasteryBadgeTier
 import com.example.report.ProgressPdfGenerator
 import kotlinx.coroutines.flow.first
@@ -144,5 +145,94 @@ class AralReadingTests {
         assertEquals(2, restoreSummary.learnersRestored)
         assertEquals(2, repository.observeLearners().first().size)
         assertEquals(2, repository.observeWrongItems(ks1Learner.id).first().first().repeatedWrongCount)
+    }
+
+    @Test
+    fun `learners have strictly isolated progress, wrong items, and track resume state`() = runTest {
+        val learnerA = repository.checkInLearner("Ana Cruz", gradeLevel = 1, section = "Rizal")
+        val learnerB = repository.checkInLearner("Ben Cruz", gradeLevel = 2, section = "Rizal")
+
+        repository.recordSessionCompletion(
+            learnerId = learnerA.id,
+            trackId = ReadingTrack.KS1_ENGLISH.id,
+            moduleId = "ks1_en_w1",
+            weekNumber = 1,
+            sessionOrder = 1,
+            totalQuestions = 4,
+            correctCount = 4,
+            firstTryCorrectCount = 4,
+        )
+        repository.recordItemMissedAfterTwoTries(
+            learnerId = learnerA.id,
+            trackId = ReadingTrack.KS1_ENGLISH.id,
+            moduleId = "ks1_en_w2",
+            moduleTitle = "Week 2",
+            itemId = "ks1_en_w2_q1",
+            promptSummary = "Sample prompt",
+            expectedAnswer = "mat",
+            learnerAnswer = "sat",
+        )
+
+        val progressA = repository.observeProgress(learnerA.id).first()
+        val progressB = repository.observeProgress(learnerB.id).first()
+        val wrongA = repository.observeWrongItems(learnerA.id).first()
+        val wrongB = repository.observeWrongItems(learnerB.id).first()
+
+        assertEquals(1, progressA.size)
+        assertEquals(0, progressB.size)
+        assertEquals(1, wrongA.size)
+        assertEquals(0, wrongB.size)
+
+        val resumeA = CurriculumRepository.resolveResumeModule(
+            track = ReadingTrack.KS1_ENGLISH,
+            lastModuleId = "ks1_en_w1",
+            progressList = progressA,
+        )
+        val resumeB = CurriculumRepository.resolveResumeModule(
+            track = ReadingTrack.KS1_ENGLISH,
+            lastModuleId = learnerB.lastModuleId,
+            progressList = progressB,
+        )
+        val resumeCrossTrack = CurriculumRepository.resolveResumeModule(
+            track = ReadingTrack.KS1_FILIPINO,
+            lastModuleId = "ks1_en_w1",
+            progressList = progressA,
+        )
+
+        assertEquals("ks1_en_w2", resumeA.id)
+        assertEquals("ks1_en_w1", resumeB.id)
+        assertEquals("ks1_fil_w1", resumeCrossTrack.id)
+    }
+
+    @Test
+    fun `mid-activity checkpoint persists per learner and clears on completion`() = runTest {
+        val learner = repository.checkInLearner("Marco Lopez", gradeLevel = 5, section = "Mabini")
+        val checkpoint = InProgressSessionEntity(
+            learnerId = learner.id,
+            moduleId = "ks2_plus_w1",
+            trackId = ReadingTrack.KS2_PLUS.id,
+            currentIndex = 2,
+            attemptNumber = 1,
+            selectedOption = null,
+            isCurrentSolved = false,
+            isCurrentFailedBothTries = false,
+            showHintBanner = false,
+            showMiniLessonBanner = false,
+            correctCount = 2,
+            firstTryCorrectCount = 2,
+            updatedAt = 100L,
+        )
+        repository.saveInProgressSession(checkpoint)
+
+        val restored = repository.getInProgressSession(learner.id, "ks2_plus_w1")
+        assertEquals(2, restored?.currentIndex)
+        assertEquals(2, restored?.correctCount)
+
+        val backupJson = repository.exportBackupJson()
+        repository.clearInProgressSession(learner.id, "ks2_plus_w1")
+        assertEquals(null, repository.getInProgressSession(learner.id, "ks2_plus_w1"))
+
+        repository.restoreFromBackupJson(backupJson).getOrThrow()
+        assertEquals(2, repository.getInProgressSession(learner.id, "ks2_plus_w1")?.currentIndex)
     }
 }

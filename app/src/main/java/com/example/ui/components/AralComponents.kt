@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Backup
 import androidx.compose.material.icons.filled.CheckCircle
@@ -27,7 +28,6 @@ import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material.icons.outlined.Circle
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.AlertDialog
@@ -133,12 +133,14 @@ fun BagacaySchoolHeader(
 @Composable
 fun BagacayCreditFooter(modifier: Modifier = Modifier) {
     Surface(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .testTag("innovation_credit_footer"),
         shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
@@ -146,18 +148,27 @@ fun BagacayCreditFooter(modifier: Modifier = Modifier) {
                 painter = painterResource(id = R.drawable.bagacay_logo),
                 contentDescription = stringResource(R.string.cd_bagacay_logo),
                 modifier = Modifier
-                    .size(28.dp)
+                    .size(32.dp)
                     .clip(CircleShape)
                     .background(Color.White),
             )
-            Column(modifier = Modifier.weight(1f)) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.innovation_credit),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold,
+                )
                 Text(
                     text = stringResource(R.string.school_credit),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 Text(
-                    text = "KS1 (Grades 1–3) & KS2 (Grades 4–6) • District of Culasi • Offline-Ready",
+                    text = "Grades 1–6 • District of Culasi • Offline-Ready",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -169,7 +180,7 @@ fun BagacayCreditFooter(modifier: Modifier = Modifier) {
 fun MasteryBadgeTier.icon(): ImageVector = when (this) {
     MasteryBadgeTier.SUPPORT_GRAY -> Icons.Outlined.Circle
     MasteryBadgeTier.EMERGING_RED -> Icons.Outlined.Info
-    MasteryBadgeTier.DEVELOPING_AMBER -> Icons.Default.TrendingUp
+    MasteryBadgeTier.DEVELOPING_AMBER -> Icons.AutoMirrored.Filled.TrendingUp
     MasteryBadgeTier.PROFICIENT_BLUE -> Icons.Default.Star
     MasteryBadgeTier.MASTERED_GREEN -> Icons.Default.EmojiEvents
 }

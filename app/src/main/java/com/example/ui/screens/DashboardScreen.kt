@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
@@ -21,22 +23,27 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Assessment
 import androidx.compose.material.icons.filled.Backup
-import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.WarningAmber
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -55,6 +62,7 @@ import com.example.audio.ReadingLanguage
 import com.example.curriculum.CurriculumRepository
 import com.example.curriculum.ReadingModule
 import com.example.curriculum.ReadingTrack
+import com.example.data.InProgressSessionEntity
 import com.example.data.LearnerEntity
 import com.example.data.MasteryBadgeTier
 import com.example.data.SessionProgressEntity
@@ -70,23 +78,57 @@ fun DashboardScreen(
     selectedTrack: ReadingTrack,
     progressList: List<SessionProgressEntity>,
     wrongItems: List<WrongItemEntity>,
+    inProgressList: List<InProgressSessionEntity> = emptyList(),
     onSelectTrack: (ReadingTrack) -> Unit,
     onStartModule: (String) -> Unit,
     onSwitchLearner: () -> Unit,
     onOpenReport: () -> Unit,
     onOpenBackupRestore: () -> Unit,
 ) {
-    val modules = remember(selectedTrack) { CurriculumRepository.getModulesForTrack(selectedTrack) }
-    val progressByModuleId = remember(progressList) { progressList.associateBy { it.moduleId } }
-    val resumeModule = remember(selectedTrack, learner.lastModuleId, progressList) {
-        CurriculumRepository.resolveResumeModule(selectedTrack, learner.lastModuleId, progressList)
+    BackHandler { onSwitchLearner() }
+
+    val learnerProgress = remember(learner.id, progressList) {
+        progressList.filter { it.learnerId == learner.id }
+    }
+    val learnerWrongItems = remember(learner.id, wrongItems) {
+        wrongItems.filter { it.learnerId == learner.id }
+    }
+    val learnerInProgress = remember(learner.id, inProgressList) {
+        inProgressList.filter { it.learnerId == learner.id }
     }
 
-    val countsByTier = remember(progressList) {
+    val modules = remember(selectedTrack) { CurriculumRepository.getModulesForTrack(selectedTrack) }
+    val trackProgress = remember(selectedTrack, learnerProgress) {
+        learnerProgress.filter { it.trackId == selectedTrack.id }
+    }
+    val progressByModuleId = remember(trackProgress) {
+        trackProgress.associateBy { it.moduleId }
+    }
+    val inProgressByModuleId = remember(selectedTrack, learnerInProgress) {
+        learnerInProgress.filter { it.trackId == selectedTrack.id }.associateBy { it.moduleId }
+    }
+    val completedInTrack = remember(trackProgress) {
+        trackProgress.count { it.attemptsCount > 0 }
+    }
+    val resumeModule = remember(selectedTrack, learner.lastModuleId, trackProgress, inProgressByModuleId) {
+        CurriculumRepository.resolveResumeModule(
+            track = selectedTrack,
+            lastModuleId = learner.lastModuleId,
+            progressList = trackProgress,
+            inProgressModuleIds = inProgressByModuleId.keys,
+        )
+    }
+    val resumeCheckpoint = inProgressByModuleId[resumeModule.id]
+    val resumeNextItem = remember(resumeModule, resumeCheckpoint) {
+        computeNextItemNumber(resumeModule, resumeCheckpoint)
+    }
+
+    val countsByTier = remember(modules, trackProgress) {
         val completedCounts = MasteryBadgeTier.entries.associateWith { tier ->
-            progressList.count { it.badgeTier == tier.tierIndex }
+            trackProgress.count { it.attemptsCount > 0 && it.badgeTier == tier.tierIndex }
         }.toMutableMap()
-        val unstarted = (CurriculumRepository.getAllModules().size - progressList.size).coerceAtLeast(0)
+        val startedCount = trackProgress.count { it.attemptsCount > 0 }
+        val unstarted = (modules.size - startedCount).coerceAtLeast(0)
         completedCounts[MasteryBadgeTier.SUPPORT_GRAY] =
             (completedCounts[MasteryBadgeTier.SUPPORT_GRAY] ?: 0) + unstarted
         completedCounts
@@ -105,7 +147,7 @@ fun DashboardScreen(
                             overflow = TextOverflow.Ellipsis,
                         )
                         Text(
-                            text = "Grade ${learner.gradeLevel} (${learner.keyStage}) • ${learner.section}",
+                            text = "Grade ${learner.gradeLevel} • ${learner.section}",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
@@ -114,6 +156,21 @@ fun DashboardScreen(
                     }
                 },
                 actions = {
+                    FilledTonalButton(
+                        onClick = onSwitchLearner,
+                        modifier = Modifier
+                            .height(40.dp)
+                            .testTag("switch_learner_button"),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.SwapHoriz,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text("Switch", style = MaterialTheme.typography.labelLarge)
+                    }
                     IconButton(
                         onClick = onOpenBackupRestore,
                         modifier = Modifier
@@ -125,38 +182,36 @@ fun DashboardScreen(
                             contentDescription = stringResource(R.string.cd_backup_restore),
                         )
                     }
-                    IconButton(
-                        onClick = onOpenReport,
-                        modifier = Modifier
-                            .size(48.dp)
-                            .testTag("dashboard_report_button"),
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Assessment,
-                            contentDescription = stringResource(R.string.cd_progress_report),
-                        )
-                    }
-                    IconButton(
-                        onClick = onSwitchLearner,
-                        modifier = Modifier
-                            .size(48.dp)
-                            .testTag("switch_learner_button"),
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.SwapHoriz,
-                            contentDescription = "Switch learner",
-                        )
-                    }
                 },
             )
         },
-        floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = onOpenReport,
-                modifier = Modifier.testTag("fab_pdf_messenger"),
-                icon = { Icon(Icons.Default.Assessment, contentDescription = null) },
-                text = { Text("PDF Report • Messenger") },
-            )
+        bottomBar = {
+            NavigationBar(windowInsets = WindowInsets.navigationBars) {
+                NavigationBarItem(
+                    selected = true,
+                    onClick = {},
+                    icon = { Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null) },
+                    label = { Text("Activities") },
+                    modifier = Modifier.testTag("nav_activities_tab"),
+                )
+                NavigationBarItem(
+                    selected = false,
+                    onClick = onOpenReport,
+                    icon = {
+                        BadgedBox(
+                            badge = {
+                                if (learnerWrongItems.isNotEmpty()) {
+                                    Badge { Text("${learnerWrongItems.size}") }
+                                }
+                            },
+                        ) {
+                            Icon(Icons.Default.Assessment, contentDescription = null)
+                        }
+                    },
+                    label = { Text("PDF Report") },
+                    modifier = Modifier.testTag("fab_pdf_messenger"),
+                )
+            }
         },
     ) { innerPadding ->
         Box(
@@ -169,114 +224,14 @@ fun DashboardScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .widthIn(max = 720.dp),
-                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 92.dp),
+                contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
-                // Resume Banner
+                // Activity Selector (KS1 and KS2 appear ONLY in the activity)
                 item {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(22.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary),
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(18.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp),
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Text(
-                                    text = "Ready to Resume",
-                                    style = MaterialTheme.typography.labelLarge,
-                                    color = MaterialTheme.colorScheme.tertiary,
-                                )
-                                Text(
-                                    text = selectedTrack.title,
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f),
-                                )
-                            }
-                            Text(
-                                text = resumeModule.title,
-                                style = MaterialTheme.typography.titleLarge,
-                                color = MaterialTheme.colorScheme.onPrimary,
-                            )
-                            Text(
-                                text = resumeModule.subtitle,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.9f),
-                            )
-                            Button(
-                                onClick = { onStartModule(resumeModule.id) },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(48.dp)
-                                    .testTag("resume_next_session_button"),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = MaterialTheme.colorScheme.tertiary,
-                                    contentColor = MaterialTheme.colorScheme.onTertiary,
-                                ),
-                            ) {
-                                Icon(Icons.Default.PlayArrow, contentDescription = null)
-                                Spacer(Modifier.width(6.dp))
-                                Text("Continue Lesson", fontWeight = FontWeight.Bold)
-                            }
-                        }
-                    }
-                }
-
-                // Repeated-Wrong Alert Strip (if any)
-                if (wrongItems.isNotEmpty()) {
-                    item {
-                        Surface(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable(onClick = onOpenReport)
-                                .testTag("repeated_wrong_alert_card"),
-                            shape = RoundedCornerShape(16.dp),
-                            color = MaterialTheme.colorScheme.errorContainer,
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.4f)),
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(14.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.WarningAmber,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.error,
-                                )
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = "${wrongItems.size} Repeated-Wrong Item(s) Tracked",
-                                        style = MaterialTheme.typography.titleSmall,
-                                        color = MaterialTheme.colorScheme.onErrorContainer,
-                                    )
-                                    Text(
-                                        text = "Tap to review, practice, or send the PDF report to Messenger.",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onErrorContainer,
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // 5-Color Mastery Legend
-                item {
-                    FiveColorMasteryLegend(countsByTier = countsByTier)
-                }
-
-                // Activity Track Selector (KS1-English, KS1-Filipino, KS2-Basic, KS2-Plus)
-                item {
-                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(
-                            text = "Select Activities (${learner.keyStage} Recommended)",
+                            text = "Select Activity",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                         )
@@ -288,7 +243,9 @@ fun DashboardScreen(
                             ) {
                                 rowTracks.forEach { track ->
                                     val isSelected = selectedTrack == track
-                                    val isRecommended = track.keyStage == learner.keyStage
+                                    val trackDoneCount = learnerProgress.count {
+                                        it.trackId == track.id && it.attemptsCount > 0
+                                    }
                                     Surface(
                                         onClick = { onSelectTrack(track) },
                                         modifier = Modifier
@@ -312,35 +269,27 @@ fun DashboardScreen(
                                     ) {
                                         Column(
                                             modifier = Modifier.padding(12.dp),
-                                            verticalArrangement = Arrangement.spacedBy(3.dp),
+                                            verticalArrangement = Arrangement.spacedBy(4.dp),
                                         ) {
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.SpaceBetween,
-                                                verticalAlignment = Alignment.CenterVertically,
-                                            ) {
-                                                Text(
-                                                    text = track.title,
-                                                    style = MaterialTheme.typography.titleSmall,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = if (isSelected) {
-                                                        MaterialTheme.colorScheme.onPrimaryContainer
-                                                    } else {
-                                                        MaterialTheme.colorScheme.onSurface
-                                                    },
-                                                )
-                                                if (isRecommended) {
-                                                    Text(
-                                                        text = "★",
-                                                        style = MaterialTheme.typography.labelMedium,
-                                                        color = MaterialTheme.colorScheme.tertiary,
-                                                    )
-                                                }
-                                            }
                                             Text(
-                                                text = track.gradeRangeLabel,
+                                                text = track.title,
+                                                style = MaterialTheme.typography.titleSmall,
+                                                fontWeight = FontWeight.Bold,
+                                                color = if (isSelected) {
+                                                    MaterialTheme.colorScheme.onPrimaryContainer
+                                                } else {
+                                                    MaterialTheme.colorScheme.onSurface
+                                                },
+                                            )
+                                            Text(
+                                                text = "$trackDoneCount / 8 done",
                                                 style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                color = if (isSelected) {
+                                                    MaterialTheme.colorScheme.primary
+                                                } else {
+                                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                                },
+                                                fontWeight = FontWeight.SemiBold,
                                             )
                                         }
                                     }
@@ -348,18 +297,148 @@ fun DashboardScreen(
                             }
                         }
                         Text(
-                            text = "${selectedTrack.title} (${selectedTrack.gradeRangeLabel}) • ${selectedTrack.description}",
+                            text = "${selectedTrack.title} • ${selectedTrack.description}",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
 
+                // Resume / Next Lesson Banner for this Learner & Selected Activity
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(22.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary),
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(18.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    text = when {
+                                        resumeNextItem != null -> "In Progress • Item $resumeNextItem of ${resumeModule.questions.size}"
+                                        completedInTrack > 0 -> "Ready to Resume"
+                                        else -> "Start Activity"
+                                    },
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = MaterialTheme.colorScheme.tertiary,
+                                )
+                                Text(
+                                    text = "$completedInTrack / ${modules.size} weeks",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.9f),
+                                )
+                            }
+                            Text(
+                                text = resumeModule.title,
+                                style = MaterialTheme.typography.titleLarge,
+                                color = MaterialTheme.colorScheme.onPrimary,
+                            )
+                            Text(
+                                text = resumeModule.subtitle,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.9f),
+                            )
+                            LinearProgressIndicator(
+                                progress = {
+                                    if (modules.isEmpty()) 0f else completedInTrack.toFloat() / modules.size.toFloat()
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(6.dp),
+                                color = MaterialTheme.colorScheme.tertiary,
+                                trackColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.25f),
+                            )
+                            Button(
+                                onClick = { onStartModule(resumeModule.id) },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(48.dp)
+                                    .testTag("resume_next_session_button"),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.tertiary,
+                                    contentColor = MaterialTheme.colorScheme.onTertiary,
+                                ),
+                            ) {
+                                Icon(Icons.Default.PlayArrow, contentDescription = null)
+                                Spacer(Modifier.width(6.dp))
+                                Text(
+                                    text = when {
+                                        resumeNextItem != null -> "Resume Item $resumeNextItem/${resumeModule.questions.size}"
+                                        completedInTrack > 0 -> "Continue Lesson"
+                                        else -> "Start Week 1"
+                                    },
+                                    fontWeight = FontWeight.Bold,
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Repeated-Wrong Alert Strip for this Learner
+                if (learnerWrongItems.isNotEmpty()) {
+                    item {
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable(onClick = onOpenReport)
+                                .testTag("repeated_wrong_alert_card"),
+                            shape = RoundedCornerShape(16.dp),
+                            color = MaterialTheme.colorScheme.errorContainer,
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.4f)),
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(14.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.WarningAmber,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.error,
+                                )
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "${learnerWrongItems.size} Repeated-Wrong Item(s) for ${learner.fullName}",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        color = MaterialTheme.colorScheme.onErrorContainer,
+                                    )
+                                    Text(
+                                        text = "Tap to practice missed items or send PDF report to Messenger.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onErrorContainer,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 5-Color Mastery Legend scoped to the selected activity
+                item {
+                    FiveColorMasteryLegend(countsByTier = countsByTier)
+                }
+
+                item {
+                    Text(
+                        text = "${selectedTrack.title} Weeks (${modules.size})",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+
                 // Module Cards
-                items(modules, key = { it.id }) { module ->
+                items(modules, key = { "${learner.id}_${it.id}" }) { module ->
                     ModuleCard(
                         module = module,
                         progress = progressByModuleId[module.id],
+                        inProgress = inProgressByModuleId[module.id],
                         onClick = { onStartModule(module.id) },
                     )
                 }
@@ -373,10 +452,22 @@ fun DashboardScreen(
     }
 }
 
+private fun computeNextItemNumber(
+    module: ReadingModule,
+    checkpoint: InProgressSessionEntity?,
+): Int? {
+    if (checkpoint == null || module.questions.isEmpty()) return null
+    val safeIndex = checkpoint.currentIndex.coerceIn(0, module.questions.lastIndex)
+    val itemFinished = checkpoint.isCurrentSolved || checkpoint.isCurrentFailedBothTries
+    val targetIndex = if (itemFinished && safeIndex + 1 < module.questions.size) safeIndex + 1 else safeIndex
+    return targetIndex + 1
+}
+
 @Composable
 private fun ModuleCard(
     module: ReadingModule,
     progress: SessionProgressEntity?,
+    inProgress: InProgressSessionEntity?,
     onClick: () -> Unit,
 ) {
     val tier = if (progress != null && progress.attemptsCount > 0) {
@@ -384,6 +475,7 @@ private fun ModuleCard(
     } else {
         MasteryBadgeTier.SUPPORT_GRAY
     }
+    val nextItemNum = computeNextItemNumber(module, inProgress)
 
     Card(
         modifier = Modifier
@@ -471,7 +563,7 @@ private fun ModuleCard(
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     Icon(
-                        imageVector = Icons.Default.MenuBook,
+                        imageVector = Icons.AutoMirrored.Filled.MenuBook,
                         contentDescription = null,
                         modifier = Modifier.size(15.dp),
                         tint = MaterialTheme.colorScheme.primary,
@@ -482,19 +574,38 @@ private fun ModuleCard(
                         color = MaterialTheme.colorScheme.primary,
                     )
                 }
-                if (progress != null && progress.attemptsCount > 0) {
-                    Text(
-                        text = "Best: ${progress.bestScore}/${progress.totalQuestions} (${progress.attemptsCount}x)",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = tier.color,
-                        fontWeight = FontWeight.Bold,
-                    )
-                } else {
-                    Text(
-                        text = "${module.questions.size} items • Tap to start",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                when {
+                    nextItemNum != null && progress != null && progress.attemptsCount > 0 -> {
+                        Text(
+                            text = "Resume Item $nextItemNum/${module.questions.size} • Best: ${progress.bestScore}/${progress.totalQuestions}",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+                    nextItemNum != null -> {
+                        Text(
+                            text = "In Progress • Item $nextItemNum/${module.questions.size}",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+                    progress != null && progress.attemptsCount > 0 -> {
+                        Text(
+                            text = "Best: ${progress.bestScore}/${progress.totalQuestions} (${progress.attemptsCount}x)",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = tier.color,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+                    else -> {
+                        Text(
+                            text = "${module.questions.size} items • Tap to start",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
             }
         }
