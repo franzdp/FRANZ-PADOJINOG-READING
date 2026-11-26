@@ -22,6 +22,6 @@ dependencyResolutionManagement {
   }
 }
 
-rootProject.name = "ARAL Reading Bagacay ES"
+rootProject.name = "Reading Bagacay ES"
 
 include(":app")

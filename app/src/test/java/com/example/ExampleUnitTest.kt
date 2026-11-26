@@ -1,10 +1,14 @@
 package com.example
 
+import com.example.audio.ReadingLanguage
+import com.example.audio.ReadingSpeechFormatter
 import com.example.curriculum.CurriculumRepository
 import com.example.curriculum.ReadingTrack
 import com.example.data.MasteryBadgeTier
 import com.example.data.SessionProgressEntity
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ExampleUnitTest {
@@ -69,5 +73,37 @@ class ExampleUnitTest {
                 inProgressModuleIds = setOf("ks2_plus_w3"),
             ).id,
         )
+    }
+
+    @Test
+    fun speech_formatter_cleans_phonemes_syllables_and_filipino_pronunciation() {
+        val englishFormatted = ReadingSpeechFormatter.format(
+            "Mini-Lesson (LAS #1): Letter Mm makes /m/ + /ă/ + /t/ in won-der-ful CVCe.",
+            ReadingLanguage.ENGLISH,
+        )
+        assertFalse(englishFormatted.contains("/"))
+        assertTrue(englishFormatted.contains("Activity 1"))
+        assertTrue(englishFormatted.contains("Letter M"))
+        assertTrue(englishFormatted.contains("mmm, short a, tuh"))
+        assertTrue(englishFormatted.contains("won, der, ful"))
+        assertTrue(englishFormatted.contains("C V C E"))
+
+        val filipinoNative = ReadingSpeechFormatter.format(
+            "Mini-Lesson (Sesyon 8): titik Ss (/s/) at patinig Aa (/a/). ma + sa = masa!",
+            ReadingLanguage.FILIPINO,
+            usingEnglishFallbackForFilipino = false,
+        )
+        assertFalse(filipinoNative.contains("/"))
+        assertTrue(filipinoNative.contains("titik S"))
+        assertTrue(filipinoNative.contains("patinig A"))
+
+        val filipinoFallback = ReadingSpeechFormatter.format(
+            "Mga bata ng Bagacay at si Niño",
+            ReadingLanguage.FILIPINO,
+            usingEnglishFallbackForFilipino = true,
+        )
+        assertTrue(filipinoFallback.contains("manga"))
+        assertTrue(filipinoFallback.contains("nang"))
+        assertTrue(filipinoFallback.contains("Ninyo"))
     }
 }

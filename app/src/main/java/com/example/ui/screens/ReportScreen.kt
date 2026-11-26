@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.dp
 import com.example.R
 import com.example.curriculum.CurriculumRepository
 import com.example.curriculum.ReadingTrack
+import com.example.data.InProgressSessionEntity
 import com.example.data.LearnerEntity
 import com.example.data.MasteryBadgeTier
 import com.example.data.SessionProgressEntity
@@ -66,6 +67,7 @@ fun ReportScreen(
     learner: LearnerEntity,
     progressList: List<SessionProgressEntity>,
     wrongItems: List<WrongItemEntity>,
+    inProgressList: List<InProgressSessionEntity> = emptyList(),
     onSendToMessenger: () -> Unit,
     onPreviewPdf: () -> Unit,
     onSavePdf: () -> Unit,
@@ -80,10 +82,19 @@ fun ReportScreen(
     val learnerWrongItems = remember(learner.id, wrongItems) {
         wrongItems.filter { it.learnerId == learner.id }
     }
+    val learnerInProgress = remember(learner.id, inProgressList) {
+        inProgressList.filter { it.learnerId == learner.id }
+    }
+    val progressByModuleId = remember(learnerProgress) {
+        learnerProgress.associateBy { it.moduleId }
+    }
+    val inProgressByModuleId = remember(learnerInProgress) {
+        learnerInProgress.associateBy { it.moduleId }
+    }
 
     val countsByTier = remember(learnerProgress) {
         MasteryBadgeTier.entries.associateWith { tier ->
-            learnerProgress.count { it.badgeTier == tier.tierIndex }
+            learnerProgress.count { it.attemptsCount > 0 && it.badgeTier == tier.tierIndex }
         }
     }
 
@@ -303,57 +314,117 @@ fun ReportScreen(
                     }
                 }
 
-                // Completed Sessions Breakdown
+                // Activities Breakdown by Key Stage (KS1 & KS2)
                 item {
                     Text(
-                        text = "Session Scores & Badges (${learnerProgress.size})",
+                        text = "Activities by Key Stage (KS1 & KS2)",
                         style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
                     )
                 }
 
-                if (learnerProgress.isEmpty()) {
-                    item {
+                val keyStages = listOf(
+                    "KS1" to "Key Stage 1 (KS1) • Grades 1–3",
+                    "KS2" to "Key Stage 2 (KS2) • Grades 4–6",
+                )
+                keyStages.forEach { (ksCode, ksTitle) ->
+                    val ksTracks = ReadingTrack.forKeyStage(ksCode)
+                    item(key = "ks_section_$ksCode") {
                         Card(
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(16.dp),
+                            shape = RoundedCornerShape(18.dp),
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                         ) {
-                            Text(
-                                text = "Complete any workbook week or Check-In to see session badges here.",
-                                style = MaterialTheme.typography.bodyMedium,
-                                modifier = Modifier.padding(16.dp),
-                            )
-                        }
-                    }
-                } else {
-                    items(learnerProgress, key = { "${learner.id}_${it.moduleId}" }) { progress ->
-                        val module = CurriculumRepository.getModuleById(progress.moduleId)
-                        val tier = MasteryBadgeTier.fromTierIndex(progress.badgeTier)
-                        val track = ReadingTrack.fromId(progress.trackId)
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(16.dp),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(14.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            Column(
+                                modifier = Modifier.padding(14.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp),
                             ) {
-                                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                    Text(
-                                        text = "[${track.shortTitle}] ${module?.title ?: progress.moduleId}",
-                                        style = MaterialTheme.typography.titleSmall,
-                                    )
-                                    Text(
-                                        text = "Best: ${progress.bestScore}/${progress.totalQuestions} • First-Try: ${progress.firstTryCorrectCount} • Attempts: ${progress.attemptsCount}",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
+                                Text(
+                                    text = ksTitle,
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary,
+                                )
+                                ksTracks.forEach { track ->
+                                    val trackModules = CurriculumRepository.getModulesForTrack(track)
+                                    val trackDone = trackModules.count { (progressByModuleId[it.id]?.attemptsCount ?: 0) > 0 }
+                                    val activeTrackItems = trackModules.filter {
+                                        (progressByModuleId[it.id]?.attemptsCount ?: 0) > 0 || inProgressByModuleId.containsKey(it.id)
+                                    }
+                                    Surface(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                                    ) {
+                                        Column(
+                                            modifier = Modifier.padding(10.dp),
+                                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically,
+                                            ) {
+                                                Text(
+                                                    text = track.title,
+                                                    style = MaterialTheme.typography.labelLarge,
+                                                    fontWeight = FontWeight.Bold,
+                                                )
+                                                Text(
+                                                    text = "$trackDone / ${trackModules.size} completed",
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    color = MaterialTheme.colorScheme.primary,
+                                                )
+                                            }
+                                            if (activeTrackItems.isEmpty()) {
+                                                Text(
+                                                    text = "No activities started yet in ${track.title} (all 8 weeks included in PDF).",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                )
+                                            } else {
+                                                activeTrackItems.forEach { module ->
+                                                    val progress = progressByModuleId[module.id]
+                                                    val checkpoint = inProgressByModuleId[module.id]
+                                                    Row(
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                                    ) {
+                                                        Column(modifier = Modifier.weight(1f)) {
+                                                            Text(
+                                                                text = module.title,
+                                                                style = MaterialTheme.typography.bodySmall,
+                                                                fontWeight = FontWeight.SemiBold,
+                                                            )
+                                                            val detail = when {
+                                                                progress != null && progress.attemptsCount > 0 ->
+                                                                    "Best: ${progress.bestScore}/${progress.totalQuestions} • First-Try: ${progress.firstTryCorrectCount} • Tries: ${progress.attemptsCount}"
+                                                                checkpoint != null -> {
+                                                                    val itemNum = (checkpoint.currentIndex + 1).coerceIn(1, module.questions.size)
+                                                                    "In Progress • Item $itemNum/${module.questions.size}"
+                                                                }
+                                                                else -> ""
+                                                            }
+                                                            Text(
+                                                                text = detail,
+                                                                style = MaterialTheme.typography.labelSmall,
+                                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                            )
+                                                        }
+                                                        if (progress != null && progress.attemptsCount > 0) {
+                                                            MasteryBadgePill(
+                                                                tier = MasteryBadgeTier.fromTierIndex(progress.badgeTier),
+                                                                compact = true,
+                                                            )
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
-                                MasteryBadgePill(tier = tier, compact = true)
                             }
                         }
                     }

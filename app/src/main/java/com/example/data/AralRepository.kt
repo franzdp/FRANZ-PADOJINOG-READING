@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.Flow
 @JsonClass(generateAdapter = true)
 data class AralBackupPayload(
     val schemaVersion: Int = 2,
-    val appName: String = "ARAL Reading Bagacay ES",
+    val appName: String = "Reading Bagacay ES",
     val school: String = "Bagacay Elementary School",
     val exportedAt: Long,
     val learners: List<LearnerEntity>,

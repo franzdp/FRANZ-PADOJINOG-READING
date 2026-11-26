@@ -16,7 +16,9 @@ import android.text.TextPaint
 import androidx.core.content.FileProvider
 import com.example.R
 import com.example.curriculum.CurriculumRepository
+import com.example.curriculum.ReadingModule
 import com.example.curriculum.ReadingTrack
+import com.example.data.InProgressSessionEntity
 import com.example.data.LearnerEntity
 import com.example.data.MasteryBadgeTier
 import com.example.data.SessionProgressEntity
@@ -40,25 +42,45 @@ object ProgressPdfGenerator {
     private const val MARGIN = 36f
     private const val CONTENT_WIDTH = PAGE_WIDTH - (MARGIN * 2)
 
+    private data class KeyStageSection(
+        val keyStageCode: String,
+        val headerLabel: String,
+        val tracks: List<ReadingTrack>,
+    )
+
+    private val keyStageSections = listOf(
+        KeyStageSection(
+            keyStageCode = "KS1",
+            headerLabel = "KEY STAGE 1 (KS1) • Grades 1–3",
+            tracks = listOf(ReadingTrack.KS1_ENGLISH, ReadingTrack.KS1_FILIPINO),
+        ),
+        KeyStageSection(
+            keyStageCode = "KS2",
+            headerLabel = "KEY STAGE 2 (KS2) • Grades 4–6",
+            tracks = listOf(ReadingTrack.KS2_BASIC, ReadingTrack.KS2_PLUS),
+        ),
+    )
+
     fun generateProgressReport(
         context: Context,
         learner: LearnerEntity,
         progressList: List<SessionProgressEntity>,
         wrongItems: List<WrongItemEntity>,
+        inProgressList: List<InProgressSessionEntity> = emptyList(),
     ): PdfGenerationResult {
         val reportsDir = File(context.cacheDir, "reports").apply { mkdirs() }
         val safeName = learner.fullName.lowercase(Locale.US)
             .replace(Regex("[^a-z0-9]+"), "_")
             .trim('_')
             .ifBlank { "learner" }
-        val pdfFile = File(reportsDir, "ARAL_Reading_${safeName}_Report.pdf")
+        val pdfFile = File(reportsDir, "Reading_${safeName}_Report.pdf")
 
         val renderedNative = runCatching {
-            renderWithAndroidPdfDocument(context, pdfFile, learner, progressList, wrongItems)
+            renderWithAndroidPdfDocument(context, pdfFile, learner, progressList, wrongItems, inProgressList)
         }.isSuccess
 
         if (!renderedNative) {
-            renderFallbackPdf(pdfFile, learner, progressList, wrongItems)
+            renderFallbackPdf(pdfFile, learner, progressList, wrongItems, inProgressList)
         }
 
         val uri = FileProvider.getUriForFile(
@@ -77,6 +99,7 @@ object ProgressPdfGenerator {
         learner: LearnerEntity,
         progressList: List<SessionProgressEntity>,
         wrongItems: List<WrongItemEntity>,
+        inProgressList: List<InProgressSessionEntity>,
     ) {
         val document = PdfDocument()
         try {
@@ -87,7 +110,10 @@ object ProgressPdfGenerator {
 
             val headerBgPaint = Paint().apply { color = Color.parseColor("#0D47A1") }
             val goldAccentPaint = Paint().apply { color = Color.parseColor("#FFB300") }
+            val ksBannerPaint = Paint().apply { color = Color.parseColor("#1E3A8A") }
+            val trackSubheaderPaint = Paint().apply { color = Color.parseColor("#E0E7FF") }
             val cardBgPaint = Paint().apply { color = Color.parseColor("#F1F5F9") }
+            val altRowBgPaint = Paint().apply { color = Color.parseColor("#F8FAFC") }
             val dividerPaint = Paint().apply {
                 color = Color.parseColor("#CBD5E1")
                 strokeWidth = 1f
@@ -110,15 +136,47 @@ object ProgressPdfGenerator {
                 typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
                 isAntiAlias = true
             }
+            val ksBannerTextPaint = TextPaint().apply {
+                color = Color.WHITE
+                textSize = 11f
+                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+                isAntiAlias = true
+            }
+            val ksBannerRightPaint = TextPaint().apply {
+                color = Color.parseColor("#FDE68A")
+                textSize = 10f
+                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+                textAlign = Paint.Align.RIGHT
+                isAntiAlias = true
+            }
+            val trackSubheaderTextPaint = TextPaint().apply {
+                color = Color.parseColor("#1E3A8A")
+                textSize = 10f
+                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+                isAntiAlias = true
+            }
+            val trackSubheaderRightPaint = TextPaint().apply {
+                color = Color.parseColor("#1E40AF")
+                textSize = 9.5f
+                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+                textAlign = Paint.Align.RIGHT
+                isAntiAlias = true
+            }
             val bodyBoldPaint = TextPaint().apply {
                 color = Color.parseColor("#0F172A")
-                textSize = 10.5f
+                textSize = 10f
                 typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
                 isAntiAlias = true
             }
             val bodyPaint = TextPaint().apply {
                 color = Color.parseColor("#334155")
-                textSize = 10f
+                textSize = 9.5f
+                isAntiAlias = true
+            }
+            val rowRightPaint = TextPaint().apply {
+                color = Color.parseColor("#334155")
+                textSize = 9f
+                textAlign = Paint.Align.RIGHT
                 isAntiAlias = true
             }
             val smallMutedPaint = TextPaint().apply {
@@ -126,25 +184,31 @@ object ProgressPdfGenerator {
                 textSize = 8.5f
                 isAntiAlias = true
             }
+            val footerPagePaint = TextPaint().apply {
+                color = Color.parseColor("#64748B")
+                textSize = 8.5f
+                textAlign = Paint.Align.RIGHT
+                isAntiAlias = true
+            }
 
             fun drawFooter(c: Canvas, pNum: Int) {
                 c.drawLine(MARGIN, PAGE_HEIGHT - 36f, PAGE_WIDTH - MARGIN, PAGE_HEIGHT - 36f, dividerPaint)
                 c.drawText(
-                    "Bagacay ES • ARAL-Reading • This innovation is created by FRANZ D. PADOJINOG",
+                    "Developed for Bagacay ES Learners • This is an innovation of FRANZ D. PADOJINOG",
                     MARGIN,
                     PAGE_HEIGHT - 20f,
                     smallMutedPaint,
                 )
                 c.drawText(
                     "Page $pNum",
-                    PAGE_WIDTH - MARGIN - 36f,
+                    PAGE_WIDTH - MARGIN,
                     PAGE_HEIGHT - 20f,
-                    smallMutedPaint,
+                    footerPagePaint,
                 )
             }
 
             fun ensureSpace(neededHeight: Float) {
-                if (y + neededHeight > PAGE_HEIGHT - 48f) {
+                if (y + neededHeight > PAGE_HEIGHT - 46f) {
                     drawFooter(canvas, pageNumber)
                     document.finishPage(page)
                     pageNumber += 1
@@ -153,6 +217,9 @@ object ProgressPdfGenerator {
                     y = MARGIN
                 }
             }
+
+            val progressByModuleId = progressList.associateBy { it.moduleId }
+            val inProgressByModuleId = inProgressList.associateBy { it.moduleId }
 
             // Top School Header with Bagacay ES Logo
             canvas.drawRect(0f, 0f, PAGE_WIDTH.toFloat(), 84f, headerBgPaint)
@@ -173,7 +240,7 @@ object ProgressPdfGenerator {
             }
             canvas.drawText("BAGACAY ELEMENTARY SCHOOL", MARGIN, 34f, titlePaint)
             canvas.drawText(
-                "ARAL-Reading Progress & Mastery Report (Grades 1–6)",
+                "Reading Progress & Mastery Report (Key Stages 1 & 2)",
                 MARGIN,
                 54f,
                 subtitlePaint,
@@ -181,14 +248,21 @@ object ProgressPdfGenerator {
             val dateStr = SimpleDateFormat("MMM dd, yyyy • hh:mm a", Locale.US).format(Date())
             canvas.drawText("Generated: $dateStr", MARGIN, 70f, subtitlePaint)
 
-            y = 108f
+            y = 104f
 
             // Learner Info Card
-            val infoRect = RectF(MARGIN, y, PAGE_WIDTH - MARGIN, y + 72f)
+            val infoRect = RectF(MARGIN, y, PAGE_WIDTH - MARGIN, y + 68f)
             canvas.drawRoundRect(infoRect, 10f, 10f, cardBgPaint)
 
             val track = ReadingTrack.fromId(learner.preferredTrackId)
             val completedCount = progressList.count { it.attemptsCount > 0 }
+            val ks1Modules = CurriculumRepository.getModulesForTrack(ReadingTrack.KS1_ENGLISH) +
+                CurriculumRepository.getModulesForTrack(ReadingTrack.KS1_FILIPINO)
+            val ks2Modules = CurriculumRepository.getModulesForTrack(ReadingTrack.KS2_BASIC) +
+                CurriculumRepository.getModulesForTrack(ReadingTrack.KS2_PLUS)
+            val ks1Done = ks1Modules.count { (progressByModuleId[it.id]?.attemptsCount ?: 0) > 0 }
+            val ks2Done = ks2Modules.count { (progressByModuleId[it.id]?.attemptsCount ?: 0) > 0 }
+
             val avgPct = if (progressList.isEmpty()) {
                 0
             } else {
@@ -197,38 +271,38 @@ object ProgressPdfGenerator {
                 }.average().toInt()
             }
 
-            canvas.drawText("Learner: ${learner.fullName}", MARGIN + 12f, y + 22f, bodyBoldPaint)
+            canvas.drawText("Learner: ${learner.fullName}", MARGIN + 12f, y + 20f, bodyBoldPaint)
             canvas.drawText(
-                "Grade ${learner.gradeLevel} • Section: ${learner.section}",
+                "Grade ${learner.gradeLevel} • Section: ${learner.section} • Selected Activity: ${track.title}",
                 MARGIN + 12f,
-                y + 40f,
+                y + 37f,
                 bodyPaint,
             )
             canvas.drawText(
-                "Activity: ${track.title}  |  Completed Sessions: $completedCount  |  Avg Best Score: $avgPct%",
+                "KS1 Done: $ks1Done/${ks1Modules.size}  |  KS2 Done: $ks2Done/${ks2Modules.size}  |  Total Completed: $completedCount  |  Avg Best: $avgPct%",
                 MARGIN + 12f,
-                y + 57f,
+                y + 54f,
                 bodyPaint,
             )
-            y += 92f
+            y += 84f
 
             // 5-Color Mastery Badge Summary
             canvas.drawText("5-Color Mastery Badge Summary", MARGIN, y, sectionHeaderPaint)
-            y += 10f
+            y += 8f
 
             val badgeCounts = MasteryBadgeTier.entries.associateWith { tier ->
-                progressList.count { it.badgeTier == tier.tierIndex }
+                progressList.count { it.attemptsCount > 0 && it.badgeTier == tier.tierIndex }
             }
             val pillWidth = (CONTENT_WIDTH - 24f) / 5f
             MasteryBadgeTier.entries.reversed().forEachIndexed { idx, tier ->
                 val left = MARGIN + idx * (pillWidth + 6f)
-                val rect = RectF(left, y, left + pillWidth, y + 46f)
+                val rect = RectF(left, y, left + pillWidth, y + 42f)
                 val bgPaint = Paint().apply { color = tier.pdfHex }
                 canvas.drawRoundRect(rect, 8f, 8f, bgPaint)
 
                 val whiteBold = TextPaint().apply {
                     color = Color.WHITE
-                    textSize = 14f
+                    textSize = 13f
                     typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
                     isAntiAlias = true
                 }
@@ -238,61 +312,106 @@ object ProgressPdfGenerator {
                     isAntiAlias = true
                 }
                 val count = badgeCounts[tier] ?: 0
-                canvas.drawText("$count", left + 10f, y + 21f, whiteBold)
-                canvas.drawText(tier.shortLabel, left + 10f, y + 36f, whiteSmall)
+                canvas.drawText("$count", left + 10f, y + 19f, whiteBold)
+                canvas.drawText(tier.shortLabel, left + 10f, y + 33f, whiteSmall)
             }
-            y += 66f
+            y += 58f
 
-            // Session Breakdown
-            ensureSpace(50f)
-            canvas.drawText("Completed Workbook Sessions & Check-Ins", MARGIN, y, sectionHeaderPaint)
-            y += 14f
-
-            if (progressList.isEmpty()) {
-                canvas.drawText(
-                    "No completed sessions recorded yet for this learner.",
-                    MARGIN,
-                    y + 6f,
-                    bodyPaint,
-                )
-                y += 28f
-            } else {
-                val sortedProgress = progressList.sortedWith(
-                    compareBy<SessionProgressEntity> { it.trackId }
-                        .thenBy { it.weekNumber }
-                        .thenBy { it.sessionOrder },
-                )
-                for (entry in sortedProgress) {
-                    ensureSpace(34f)
-                    val module = CurriculumRepository.getModuleById(entry.moduleId)
-                    val title = module?.title ?: entry.moduleId
-                    val trackLabel = ReadingTrack.fromId(entry.trackId).shortTitle
-                    val tier = MasteryBadgeTier.fromTierIndex(entry.badgeTier)
-                    val pct = if (entry.totalQuestions > 0) {
-                        (entry.bestScore * 100) / entry.totalQuestions
-                    } else {
-                        0
-                    }
-
-                    val rowRect = RectF(MARGIN, y, PAGE_WIDTH - MARGIN, y + 26f)
-                    canvas.drawRoundRect(rowRect, 6f, 6f, cardBgPaint)
-
-                    val dotPaint = Paint().apply { color = tier.pdfHex }
-                    canvas.drawCircle(MARGIN + 12f, y + 13f, 5f, dotPaint)
-
-                    val clippedTitle = clipText(title, 34)
-                    canvas.drawText("[$trackLabel] $clippedTitle", MARGIN + 24f, y + 17f, bodyBoldPaint)
-                    canvas.drawText(
-                        "${entry.bestScore}/${entry.totalQuestions} ($pct%) • ${tier.shortLabel} • Tries: ${entry.attemptsCount}",
-                        PAGE_WIDTH - MARGIN - 195f,
-                        y + 17f,
-                        bodyPaint,
-                    )
-                    y += 32f
-                }
-            }
-
+            // Activities Listed Based on Key Stages (KS1 & KS2 - ARAL Math Format)
+            ensureSpace(44f)
+            canvas.drawText("Activities Progress by Key Stage (KS1 & KS2)", MARGIN, y, sectionHeaderPaint)
             y += 10f
+
+            for (ksSection in keyStageSections) {
+                val ksAllModules = ksSection.tracks.flatMap { CurriculumRepository.getModulesForTrack(it) }
+                val ksCompleted = ksAllModules.count { (progressByModuleId[it.id]?.attemptsCount ?: 0) > 0 }
+                val ksInProgress = ksAllModules.count {
+                    (progressByModuleId[it.id]?.attemptsCount ?: 0) == 0 && inProgressByModuleId.containsKey(it.id)
+                }
+
+                ensureSpace(64f)
+                val bannerRect = RectF(MARGIN, y, PAGE_WIDTH - MARGIN, y + 24f)
+                canvas.drawRoundRect(bannerRect, 6f, 6f, ksBannerPaint)
+                canvas.drawText(ksSection.headerLabel, MARGIN + 10f, y + 16f, ksBannerTextPaint)
+                val ksSummaryStr = if (ksInProgress > 0) {
+                    "$ksCompleted/${ksAllModules.size} Completed • $ksInProgress In Progress"
+                } else {
+                    "$ksCompleted/${ksAllModules.size} Completed"
+                }
+                canvas.drawText(ksSummaryStr, PAGE_WIDTH - MARGIN - 10f, y + 16f, ksBannerRightPaint)
+                y += 28f
+
+                for (ksTrack in ksSection.tracks) {
+                    val trackModules = CurriculumRepository.getModulesForTrack(ksTrack)
+                    val trackDone = trackModules.count { (progressByModuleId[it.id]?.attemptsCount ?: 0) > 0 }
+
+                    ensureSpace(46f)
+                    val subRect = RectF(MARGIN, y, PAGE_WIDTH - MARGIN, y + 20f)
+                    canvas.drawRoundRect(subRect, 5f, 5f, trackSubheaderPaint)
+                    canvas.drawText("${ksTrack.title} (${ksTrack.gradeRangeLabel})", MARGIN + 10f, y + 13.5f, trackSubheaderTextPaint)
+                    canvas.drawText("$trackDone / ${trackModules.size} done", PAGE_WIDTH - MARGIN - 10f, y + 13.5f, trackSubheaderRightPaint)
+                    y += 23f
+
+                    trackModules.forEachIndexed { idx, module ->
+                        ensureSpace(24f)
+                        val progress = progressByModuleId[module.id]
+                        val checkpoint = inProgressByModuleId[module.id]
+                        val nextItemNum = computeNextItemNumber(module, checkpoint)
+
+                        val rowBg = if (idx % 2 == 0) cardBgPaint else altRowBgPaint
+                        val rowRect = RectF(MARGIN, y, PAGE_WIDTH - MARGIN, y + 20f)
+                        canvas.drawRoundRect(rowRect, 4f, 4f, rowBg)
+
+                        val dotColor: Int
+                        val statusText: String
+                        val statusColor: Int
+                        when {
+                            progress != null && progress.attemptsCount > 0 -> {
+                                val tier = MasteryBadgeTier.fromTierIndex(progress.badgeTier)
+                                val pct = if (progress.totalQuestions > 0) {
+                                    (progress.bestScore * 100) / progress.totalQuestions
+                                } else {
+                                    0
+                                }
+                                dotColor = tier.pdfHex
+                                statusColor = tier.pdfHex
+                                statusText = if (nextItemNum != null) {
+                                    "Resume Item $nextItemNum/${module.questions.size} • Best: ${progress.bestScore}/${progress.totalQuestions} ($pct%) • ${tier.shortLabel}"
+                                } else {
+                                    "${progress.bestScore}/${progress.totalQuestions} ($pct%) • ${tier.shortLabel} • Tries: ${progress.attemptsCount}"
+                                }
+                            }
+                            nextItemNum != null -> {
+                                dotColor = Color.parseColor("#0284C7")
+                                statusColor = Color.parseColor("#0369A1")
+                                statusText = "In Progress • Item $nextItemNum/${module.questions.size}"
+                            }
+                            else -> {
+                                dotColor = MasteryBadgeTier.SUPPORT_GRAY.pdfHex
+                                statusColor = Color.parseColor("#64748B")
+                                statusText = "Not Started (${module.questions.size} items)"
+                            }
+                        }
+
+                        val dotPaint = Paint().apply {
+                            color = dotColor
+                            isAntiAlias = true
+                        }
+                        canvas.drawCircle(MARGIN + 10f, y + 10f, 4f, dotPaint)
+
+                        val clippedTitle = clipText(module.title, 36)
+                        canvas.drawText(clippedTitle, MARGIN + 20f, y + 13.5f, bodyBoldPaint)
+
+                        rowRightPaint.color = statusColor
+                        canvas.drawText(statusText, PAGE_WIDTH - MARGIN - 8f, y + 13.5f, rowRightPaint)
+                        y += 22f
+                    }
+                    y += 4f
+                }
+                y += 4f
+            }
+
+            y += 6f
             ensureSpace(64f)
             canvas.drawText(
                 "Repeated-Wrong Items & Remediation Targets (${wrongItems.size})",
@@ -323,8 +442,9 @@ object ProgressPdfGenerator {
                         typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
                         isAntiAlias = true
                     }
+                    val ksTag = ReadingTrack.fromId(item.trackId).keyStage
                     canvas.drawText(
-                        "${clipText(item.moduleTitle, 38)}  •  Repeated Wrong: ${item.repeatedWrongCount}x (Total Misses: ${item.wrongCount})",
+                        "[$ksTag] ${clipText(item.moduleTitle, 34)}  •  Repeated Wrong: ${item.repeatedWrongCount}x (Misses: ${item.wrongCount})",
                         MARGIN + 10f,
                         y + 16f,
                         repeatPaint,
@@ -356,22 +476,46 @@ object ProgressPdfGenerator {
         }
     }
 
+    private fun computeNextItemNumber(
+        module: ReadingModule,
+        checkpoint: InProgressSessionEntity?,
+    ): Int? {
+        if (checkpoint == null || module.questions.isEmpty()) return null
+        val safeIndex = checkpoint.currentIndex.coerceIn(0, module.questions.lastIndex)
+        val itemFinished = checkpoint.isCurrentSolved || checkpoint.isCurrentFailedBothTries
+        val targetIndex = if (itemFinished && safeIndex + 1 < module.questions.size) safeIndex + 1 else safeIndex
+        return targetIndex + 1
+    }
+
     private fun renderFallbackPdf(
         pdfFile: File,
         learner: LearnerEntity,
         progressList: List<SessionProgressEntity>,
         wrongItems: List<WrongItemEntity>,
+        inProgressList: List<InProgressSessionEntity>,
     ) {
+        val progressByModuleId = progressList.associateBy { it.moduleId }
+        val inProgressByModuleId = inProgressList.associateBy { it.moduleId }
         val lines = buildList {
-            add("BAGACAY ELEMENTARY SCHOOL - ARAL-READING REPORT")
+            add("BAGACAY ELEMENTARY SCHOOL - READING REPORT (KEY STAGES)")
             add("Learner: ${learner.fullName} | Grade ${learner.gradeLevel} - ${learner.section}")
-            add("Completed Sessions: ${progressList.size} | Repeated-Wrong Items: ${wrongItems.size}")
-            wrongItems.take(12).forEach {
+            keyStageSections.forEach { ks ->
+                add("--- ${ks.keyStageCode} ---")
+                ks.tracks.forEach { tr ->
+                    val mods = CurriculumRepository.getModulesForTrack(tr)
+                    val done = mods.count { (progressByModuleId[it.id]?.attemptsCount ?: 0) > 0 }
+                    val inProg = mods.count { inProgressByModuleId.containsKey(it.id) }
+                    add("${tr.title}: $done/${mods.size} completed, $inProg in progress")
+                }
+            }
+            add("Repeated-Wrong Items: ${wrongItems.size}")
+            wrongItems.take(8).forEach {
                 add("Missed (${it.repeatedWrongCount}x): ${it.expectedAnswer} [Last: ${it.lastWrongAnswer}]")
             }
+            add("Developed for Bagacay ES Learners | This is an innovation of FRANZ D. PADOJINOG")
         }
         val escapedStream = buildString {
-            append("BT\n/F1 11 Tf\n40 780 Td\n16 TL\n")
+            append("BT\n/F1 10 Tf\n40 780 Td\n15 TL\n")
             lines.forEach { line ->
                 val clean = line.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
                 append("($clean) Tj T*\n")
@@ -406,14 +550,16 @@ object ProgressPdfGenerator {
         wrongItems: List<WrongItemEntity>,
     ): String {
         val completed = progressList.count { it.attemptsCount > 0 }
+        val ks1Done = progressList.count { ReadingTrack.fromId(it.trackId).keyStage == "KS1" && it.attemptsCount > 0 }
+        val ks2Done = progressList.count { ReadingTrack.fromId(it.trackId).keyStage == "KS2" && it.attemptsCount > 0 }
         val mastered = progressList.count { it.badgeTier == MasteryBadgeTier.MASTERED_GREEN.tierIndex }
         val topWeak = wrongItems.take(3).joinToString("; ") {
             "${it.expectedAnswer} (${it.repeatedWrongCount}x)"
         }
         return buildString {
-            append("Bagacay ES ARAL-Reading Report\n")
+            append("Bagacay ES Reading Report\n")
             append("Learner: ${learner.fullName} (Grade ${learner.gradeLevel} - ${learner.section})\n")
-            append("Sessions Completed: $completed | Mastered Badges: $mastered\n")
+            append("KS1 Done: $ks1Done/16 | KS2 Done: $ks2Done/16 | Total: $completed | Mastered: $mastered\n")
             if (wrongItems.isNotEmpty()) {
                 append("Repeated-Wrong Items (${wrongItems.size}): $topWeak")
             } else {
@@ -440,7 +586,7 @@ object MessengerReportSharer {
             type = "application/pdf"
             putExtra(Intent.EXTRA_STREAM, result.contentUri)
             putExtra(Intent.EXTRA_TEXT, result.summaryText)
-            putExtra(Intent.EXTRA_SUBJECT, "ARAL Reading Progress Report - Bagacay ES")
+            putExtra(Intent.EXTRA_SUBJECT, "Reading Progress Report - Bagacay ES")
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
 
@@ -461,7 +607,7 @@ object MessengerReportSharer {
             // Fallback to Android share chooser so report can always be sent
         }
 
-        val chooser = Intent.createChooser(baseIntent, "Send ARAL-Reading PDF Report via Messenger or Share")
+        val chooser = Intent.createChooser(baseIntent, "Send Reading PDF Report via Messenger or Share")
         context.startActivity(chooser)
         return "Messenger not detected — opened Share Sheet with PDF Report."
     }

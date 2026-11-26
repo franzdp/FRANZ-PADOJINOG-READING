@@ -24,14 +24,14 @@ object Ks2PlusCurriculum {
                 ReadingQuestion(
                     id = "ks2_plus_w1_q1",
                     kind = QuestionKind.WORD_BUILDER,
-                    prompt = "Verb Root Maze (Week 1): What is the root word of 'laughed'?",
+                    prompt = "What is the root word of 'laughed'?",
                     speakText = "laughed. What is the root word of laughed?",
                     language = ReadingLanguage.ENGLISH,
                     visualCue = "laughed  →  [ ____ ] + ed",
                     options = listOf("laugh", "laughe", "laughing", "laughs"),
                     correctAnswer = "laugh",
                     hint = "Take away the past-tense suffix '-ed'.",
-                    miniLesson = "Mini-Lesson (KS2 Plus Wk 1): A root word is the simplest base word before prefixes or suffixes (-ed, -ing, -s) are added. laughed → laugh!",
+                    miniLesson = "Mini-Lesson: A root word is the simplest base word before prefixes or suffixes (-ed, -ing, -s) are added. laughed → laugh!",
                 ),
                 ReadingQuestion(
                     id = "ks2_plus_w1_q2",
@@ -93,7 +93,7 @@ object Ks2PlusCurriculum {
                     options = listOf("small", "tall", "giant", "loud"),
                     correctAnswer = "small",
                     hint = "Synonyms have similar meanings. Think of a little pea seed!",
-                    miniLesson = "Mini-Lesson (KS2 Plus Wk 2): Synonyms = Similar meaning (tiny / small, clever / smart). Antonyms = Opposite meaning (tiny / huge, high / low).",
+                    miniLesson = "Mini-Lesson: Synonyms = Similar meaning (tiny / small, clever / smart). Antonyms = Opposite meaning (tiny / huge, high / low).",
                 ),
                 ReadingQuestion(
                     id = "ks2_plus_w2_q2",
@@ -120,7 +120,7 @@ object Ks2PlusCurriculum {
                 ReadingQuestion(
                     id = "ks2_plus_w2_q4",
                     kind = QuestionKind.WORD_BUILDER,
-                    prompt = "Word Unscramble (Week 2): Unscramble [ d - e - h - i ] from 'How to Play Hide and Seek'.",
+                    prompt = "Unscramble [ d - e - h - i ] to name a game word from 'How to Play Hide and Seek'.",
                     speakText = "hide. How to play hide and seek.",
                     language = ReadingLanguage.ENGLISH,
                     visualCue = "🙈  d  •  e  •  h  •  i",
@@ -150,13 +150,13 @@ object Ks2PlusCurriculum {
                 ReadingQuestion(
                     id = "ks2_plus_w3_q1",
                     kind = QuestionKind.READING_COMPREHENSION,
-                    prompt = "Guess the Place (Week 3): Where do the Ivatan people live with famous stone houses?",
+                    prompt = "Where do the Ivatan people live with their famous stone houses?",
                     speakText = "Where do the Ivatan people live?",
                     language = ReadingLanguage.ENGLISH,
                     options = listOf("Batanes", "Palawan", "Baguio", "Cebu"),
                     correctAnswer = "Batanes",
                     hint = "Check the first two words of the passage.",
-                    miniLesson = "Mini-Lesson (KS2 Plus Wk 3): The Ivatan people live in the northernmost Philippine province of Batanes.",
+                    miniLesson = "Mini-Lesson: The Ivatan people live in the northernmost Philippine province of Batanes.",
                 ),
                 ReadingQuestion(
                     id = "ks2_plus_w3_q2",
@@ -168,7 +168,7 @@ object Ks2PlusCurriculum {
                     options = listOf("flask", "mask", "crack", "park"),
                     correctAnswer = "flask",
                     hint = "Starts with /fl/ and ends with /-sk/ (CCVCC).",
-                    miniLesson = "Mini-Lesson: Week 3 target words blend clusters smoothly: mask (-sk), flask (fl- / -sk), lift (-ft), crack (cr- / -ck), park (-rk).",
+                    miniLesson = "Mini-Lesson: Consonant clusters blend smoothly together: mask (-sk), flask (fl- / -sk), lift (-ft), crack (cr- / -ck), park (-rk).",
                 ),
                 ReadingQuestion(
                     id = "ks2_plus_w3_q3",
@@ -219,7 +219,7 @@ object Ks2PlusCurriculum {
                     options = listOf("At the playground", "At home", "Inside the bus", "In the market"),
                     correctAnswer = "At the playground",
                     hint = "Setting tells WHERE and WHEN a story happens.",
-                    miniLesson = "Mini-Lesson (KS2 Plus Wk 4): Every story has Characters (who), Setting (where/when), Problem (trouble), and Solution (how it is fixed).",
+                    miniLesson = "Mini-Lesson: Every story has Characters (who), Setting (where/when), Problem (trouble), and Solution (how it is fixed).",
                 ),
                 ReadingQuestion(
                     id = "ks2_plus_w4_q2",
@@ -291,7 +291,7 @@ object Ks2PlusCurriculum {
                     options = listOf("hardworking and caring", "rainy", "hungry", "sleepy"),
                     correctAnswer = "hardworking and caring",
                     hint = "Traits are shown by repeated actions—like waking up early every day and caring for plants.",
-                    miniLesson = "Mini-Lesson (KS2 Plus Wk 5): Feelings change quickly (worried, excited, sad), while Character Traits show what a person is like over time (hardworking, honest, caring).",
+                    miniLesson = "Mini-Lesson: Feelings change quickly (worried, excited, sad), while Character Traits show what a person is like over time (hardworking, honest, caring).",
                 ),
                 ReadingQuestion(
                     id = "ks2_plus_w5_q2",
@@ -368,7 +368,7 @@ object Ks2PlusCurriculum {
                     ),
                     correctAnswer = "Learners know how to exit calmly and safely",
                     hint = "Cause = WHY it happens (practicing drills). Effect = WHAT happens as a result.",
-                    miniLesson = "Mini-Lesson (KS2 Plus Wk 6): Cause is the reason ('because...'); Effect is the outcome ('so...').",
+                    miniLesson = "Mini-Lesson: Cause is the reason ('because...'); Effect is the outcome ('so...').",
                 ),
                 ReadingQuestion(
                     id = "ks2_plus_w6_q2",
@@ -405,7 +405,7 @@ object Ks2PlusCurriculum {
                 ReadingQuestion(
                     id = "ks2_plus_w6_q4",
                     kind = QuestionKind.PHONICS_SOUND,
-                    prompt = "Which signal words from Week 6 help us draw a conclusion or inference?",
+                    prompt = "Which signal words help us draw a conclusion or inference?",
                     speakText = "Which clue words help draw conclusions: means, suggests, evidence?",
                     language = ReadingLanguage.ENGLISH,
                     options = listOf(
@@ -450,7 +450,7 @@ object Ks2PlusCurriculum {
                     ),
                     correctAnswer = "The festival of breaking the fast after Ramadan",
                     hint = "Check the very first sentence of the passage.",
-                    miniLesson = "Mini-Lesson (KS2 Plus Wk 7): Answering Who, What, Where, When, and Why helps us catch the most significant details for summarizing!",
+                    miniLesson = "Mini-Lesson: Answering Who, What, Where, When, and Why helps us catch the most significant details for summarizing!",
                 ),
                 ReadingQuestion(
                     id = "ks2_plus_w7_q2",
@@ -527,7 +527,7 @@ object Ks2PlusCurriculum {
                     ),
                     correctAnswer = "Rinse the rice grains gently",
                     hint = "Follow the order word 'First' in the passage.",
-                    miniLesson = "Mini-Lesson (KS2 Plus Wk 8): Procedural texts (like Cooking Perfect Rice or Making Hot Chocolate) give ordered steps—never skip step 1!",
+                    miniLesson = "Mini-Lesson: Procedural texts (like Cooking Perfect Rice or Making Hot Chocolate) give ordered steps—never skip step 1!",
                 ),
                 ReadingQuestion(
                     id = "ks2_plus_w8_q2",

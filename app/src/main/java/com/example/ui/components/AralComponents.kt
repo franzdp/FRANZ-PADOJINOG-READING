@@ -108,7 +108,7 @@ fun BagacaySchoolHeader(
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
-                        text = "ARAL-Reading App",
+                        text = "Reading App",
                         style = MaterialTheme.typography.headlineSmall,
                         color = Color.White,
                         maxLines = 1,
@@ -166,11 +166,6 @@ fun BagacayCreditFooter(modifier: Modifier = Modifier) {
                     text = stringResource(R.string.school_credit),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurface,
-                )
-                Text(
-                    text = "Grades 1–6 • District of Culasi • Offline-Ready",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }

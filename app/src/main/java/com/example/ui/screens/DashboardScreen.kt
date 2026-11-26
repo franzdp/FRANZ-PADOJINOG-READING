@@ -509,7 +509,7 @@ private fun ModuleCard(
                         },
                     ) {
                         Text(
-                            text = if (module.isCheckIn) "Week ${module.weekNumber} • Check-In" else "Week ${module.weekNumber}",
+                            text = "Week ${module.weekNumber}",
                             style = MaterialTheme.typography.labelMedium,
                             color = if (module.isCheckIn) {
                                 MaterialTheme.colorScheme.onTertiaryContainer

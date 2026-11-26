@@ -517,6 +517,7 @@ class AralViewModel(application: Application) : AndroidViewModel(application) {
                     learner = learner,
                     progressList = activeProgress.value,
                     wrongItems = activeWrongItems.value,
+                    inProgressList = activeInProgress.value,
                 )
             }
             _lastPdfResult.value = result
@@ -534,6 +535,7 @@ class AralViewModel(application: Application) : AndroidViewModel(application) {
                     learner = learner,
                     progressList = activeProgress.value,
                     wrongItems = activeWrongItems.value,
+                    inProgressList = activeInProgress.value,
                 )
             }
             _lastPdfResult.value = result
@@ -554,6 +556,7 @@ class AralViewModel(application: Application) : AndroidViewModel(application) {
                         learner = learner,
                         progressList = activeProgress.value,
                         wrongItems = activeWrongItems.value,
+                        inProgressList = activeInProgress.value,
                     )
                 }
                 _lastPdfResult.value = result

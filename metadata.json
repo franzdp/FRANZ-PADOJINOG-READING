@@ -1,6 +1,6 @@
 {
-  "name": "ARAL Reading Bagacay ES",
-  "description": "Offline-first DepEd ARAL-Reading remediation app for Bagacay Elementary School (KS1 Grades 1-3 & KS2 Grades 4-6) with Philippine English & Filipino TTS, 2-try hints/mini-lessons, 5-color mastery badges, PDF Messenger reports with repeated-wrong tracking, and JSON Backup/Restore.",
+  "name": "Reading Bagacay ES",
+  "description": "Offline-first Reading remediation app for Bagacay Elementary School (KS1 Grades 1-3 & KS2 Grades 4-6) with Philippine English & Filipino TTS, 2-try hints/mini-lessons, 5-color mastery badges, PDF Messenger reports with repeated-wrong tracking, and JSON Backup/Restore.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

@@ -17,7 +17,7 @@ enum class ReadingTrack(
         shortTitle = "KS1-English",
         keyStage = "KS1",
         gradeRangeLabel = "Grades 1–3",
-        description = "Alphabet, phonics, CVC words, sight words, Magic E & Check-ins #1–#4",
+        description = "Alphabet, phonics, CVC words, sight words & Magic E",
         primaryLanguage = ReadingLanguage.ENGLISH,
     ),
     KS1_FILIPINO(
@@ -26,7 +26,7 @@ enum class ReadingTrack(
         shortTitle = "KS1-Filipino",
         keyStage = "KS1",
         gradeRangeLabel = "Grades 1–3",
-        description = "Sesyon 1–36: Alpabeto, pagpapantig, klaster, salitandaan & Check-ins #1–#4",
+        description = "Alpabeto, pagpapantig, klaster, salitandaan at pagbasa",
         primaryLanguage = ReadingLanguage.FILIPINO,
     ),
     KS2_BASIC(
@@ -64,7 +64,7 @@ enum class QuestionKind(val badgeLabel: String) {
     PHONICS_SOUND("Phonics & Sound"),
     WORD_BUILDER("Word & Syllable Builder"),
     READING_COMPREHENSION("Story & Comprehension"),
-    CHECK_IN("Progress Check-In"),
+    CHECK_IN("Review & Mastery"),
 }
 
 data class ReadingPassage(

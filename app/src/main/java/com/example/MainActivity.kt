@@ -215,6 +215,7 @@ fun AralReadingApp(
                             learner = learner,
                             progressList = activeProgress,
                             wrongItems = activeWrongItems,
+                            inProgressList = activeInProgress,
                             onSendToMessenger = { viewModel.generateAndSharePdfToMessenger(context) },
                             onPreviewPdf = { viewModel.generateAndPreviewPdf(context) },
                             onSavePdf = {
@@ -222,7 +223,7 @@ fun AralReadingApp(
                                     .replace(Regex("[^a-z0-9]+"), "_")
                                     .trim('_')
                                     .ifBlank { "learner" }
-                                savePdfLauncher.launch("ARAL_Reading_${safeName}_Report.pdf")
+                                savePdfLauncher.launch("Reading_${safeName}_Report.pdf")
                             },
                             onPracticeWrongItems = {
                                 if (viewModel.startRepeatedWrongPractice()) {
@@ -242,7 +243,7 @@ fun AralReadingApp(
             learnerCount = learners.size,
             onExportBackup = {
                 val stamp = SimpleDateFormat("yyyyMMdd_HHmm", Locale.US).format(Date())
-                exportBackupLauncher.launch("ARAL_Reading_BagacayES_Backup_$stamp.json")
+                exportBackupLauncher.launch("Reading_BagacayES_Backup_$stamp.json")
             },
             onRestoreBackup = {
                 restoreBackupLauncher.launch(arrayOf("application/json", "*/*"))
